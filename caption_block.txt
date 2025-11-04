@@ -1,0 +1,219 @@
+﻿# Images are already in 1:1 square format, so no aspect ratio adjustment needed
+                
+                # Find and fill caption
+                try:
+                    print("Looking for caption input area...")
+                    # Try multiple selectors for the caption area
+                    caption_area = None
+                    caption_selectors = [
+                        # The specific element provided by user
+                        "p.xdj266r.x14z9mp.xat24cr.x1lziwak[dir='auto']",
+                        "//p[@class='xdj266r x14z9mp xat24cr x1lziwak' and @dir='auto']",
+                        # Try finding parent with class that contains these classes
+                        "//p[contains(@class, 'xdj266r') and contains(@class, 'x14z9mp')]",
+                        # Fallback to textarea
+                        "textarea[aria-label*='Write a caption']",
+                        "textarea[aria-label*='Ã‰crire une lÃ©gende']",
+                        "//textarea",
+                        # Contenteditable div
+                        "div[contenteditable='true']",
+                        "//div[@contenteditable='true']",
+                    ]
+                    
+                    for selector in caption_selectors:
+                        try:
+                            if selector.startswith("//"):
+                                caption_area = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_element_located((By.XPATH, selector))
+                                )
+                            else:
+                                caption_area = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                                )
+                            if caption_area and caption_area.is_displayed():
+                                print(f"  Found caption area using selector: {selector}")
+                                break
+                        except:
+                            continue
+                    
+                    if not caption_area:
+                        # Try to find parent contenteditable element
+                        try:
+                            p_element = driver.find_element(By.CSS_SELECTOR, "p.xdj266r.x14z9mp.xat24cr.x1lziwak[dir='auto']")
+                            # Find parent with contenteditable
+                            caption_area = driver.execute_script("""
+                                var p = arguments[0];
+                                var parent = p.parentElement;
+                                while (parent) {
+                                    if (parent.contentEditable === 'true' || parent.getAttribute('contenteditable') === 'true') {
+                                        return parent;
+                                    }
+                                    parent = parent.parentElement;
+                                }
+                                return p;
+                            """, p_element)
+                            if caption_area:
+                                print("  Found parent contenteditable element")
+                        except:
+                            pass
+                    
+                    if caption_area:
+                        # Wait for element to be clickable and scroll into view
+                        print("  Waiting for caption area to be ready...")
+                        try:
+                            WebDriverWait(driver, 5).until(
+                                EC.element_to_be_clickable(caption_area)
+                            )
+                        except:
+                            print("  âš  Element might not be clickable yet, continuing anyway...")
+                        
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", caption_area)
+                        time.sleep(1)
+                        
+                        # Try multiple methods to fill the caption
+                        caption_filled = False
+                        
+                        # Method 1: Click to focus, then use send_keys (most reliable for contenteditable)
+                        try:
+                            from selenium.webdriver.common.keys import Keys
+                            from selenium.webdriver.common.action_chains import ActionChains
+                            
+                            # Multiple click strategies to ensure the element is focused
+                            print("  Clicking on caption text box to focus...")
+                            
+                            # Strategy 1: JavaScript click (more reliable for some elements)
+                            driver.execute_script("arguments[0].click();", caption_area)
+                            time.sleep(0.5)
+                            
+                            # Strategy 2: Regular Selenium click
+                            try:
+                                caption_area.click()
+                                time.sleep(0.5)
+                            except:
+                                pass
+                            
+                            # Strategy 3: ActionChains click (moves mouse and clicks)
+                            try:
+                                ActionChains(driver).move_to_element(caption_area).click().perform()
+                                time.sleep(0.5)
+                            except:
+                                pass
+                            
+                            # Ensure element has focus using JavaScript
+                            driver.execute_script("arguments[0].focus();", caption_area)
+                            time.sleep(0.5)
+                            
+                            # Verify focus
+                            focused_element = driver.execute_script("return document.activeElement;")
+                            if focused_element == caption_area or driver.execute_script("return arguments[0].contains(document.activeElement) || arguments[0] === document.activeElement;", caption_area):
+                                print("  âœ“ Caption box is focused")
+                            else:
+                                print("  âš  Warning: Caption box might not be focused, continuing anyway...")
+                            
+                            # Clear any existing content
+                            ActionChains(driver).key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).perform()
+                            time.sleep(0.3)
+                            ActionChains(driver).send_keys(Keys.DELETE).perform()
+                            time.sleep(0.3)
+                            
+                            # Type the caption
+                            print(f"  Typing caption ({len(caption)} characters)...")
+                            caption_area.send_keys(caption)
+                            time.sleep(1)
+                            caption_filled = True
+                            print("  âœ“ Caption filled using send_keys")
+                        except Exception as send_keys_error:
+                            print(f"  send_keys failed: {send_keys_error}")
+                        
+                                                # Method 2: JavaScript with proper event handling (if send_keys didn't work)
+                        if not caption_filled:
+                            try:
+                                print("  Trying JavaScript method to fill caption...")
+                                # First, click and focus the element
+                                driver.execute_script("""
+                                    var element = arguments[0];
+                                    element.click();
+                                    element.focus();
+                                    element.scrollIntoView({block: 'center', behavior: 'smooth'});
+                                """, caption_area)
+                                time.sleep(0.5)  # Wait for focus to take effect
+                                
+                                # Now set the content
+                                driver.execute_script("""
+                                    var element = arguments[0];
+                                    var text = arguments[1];
+
+                                    // For contenteditable elements, we need to set the content properly
+                                    // Clear existing content
+                                    while (element.firstChild) {
+                                        element.removeChild(element.firstChild);
+                                    }
+                                    
+                                    // Set the text - try multiple methods
+                                    element.textContent = text;
+                                    element.innerText = text;
+                                    
+                                    // For <p> elements, also set innerHTML with proper structure
+                                    if (element.tagName === 'P') {
+                                        // Split by newlines and join with <br> tags
+                                        var lines = text.split('\\n');
+                                        element.innerHTML = lines.join('<br>');
+                                    }
+                                    
+                                    // Move cursor to end
+                                    var range = document.createRange();
+                                    var selection = window.getSelection();
+                                    range.selectNodeContents(element);
+                                    range.collapse(false);
+                                    selection.removeAllRanges();
+                                    selection.addRange(range);
+                                    
+                                    // Trigger all relevant events that Instagram listens for
+                                    var eventTypes = ['input', 'change', 'keyup', 'keydown', 'paste', 'compositionend'];
+                                    eventTypes.forEach(function(eventType) {
+                                        var event = new Event(eventType, { bubbles: true, cancelable: true });
+                                        element.dispatchEvent(event);
+                                    });
+                                    
+                                    // Also trigger InputEvent specifically (more realistic)
+                                    try {
+                                        var inputEvent = new InputEvent('input', { 
+                                            bubbles: true, 
+                                            cancelable: true, 
+                                            data: text,
+                                            inputType: 'insertText'
+                                        });
+                                        element.dispatchEvent(inputEvent);
+                                    } catch(e) {
+                                        // Fallback if InputEvent not supported
+                                        var inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                                        element.dispatchEvent(inputEvent);
+                                    }
+                                """, caption_area, caption)
+                                time.sleep(1)
+                                caption_filled = True
+                                print("âœ“ Caption filled using JavaScript")
+                            except Exception as js_error:
+                                print(f"  JavaScript method failed: {js_error}")
+                        
+                        if not caption_filled:
+                            print("âš  All caption filling methods failed")
+                        else:
+                            # Verify the caption was actually set
+                            try:
+                                actual_text = driver.execute_script("return arguments[0].innerText || arguments[0].textContent || '';", caption_area)
+                                if actual_text.strip():
+                                    print(f"âœ“ Verified caption is set (length: {len(actual_text)} characters)")
+                                else:
+                                    print("âš  Warning: Caption area appears empty after filling")
+                            except:
+                                pass
+                        
+                        time.sleep(1)
+                    else:
+                        print("âš  Could not find caption area - you may need to add caption manually")
+                except Exception as caption_error:
+                    print(f"âš  Error finding/filling caption area: {caption_error}")
+                    import traceback
+                    traceback.print_exc()
+                    print("You may need to add caption manually")
