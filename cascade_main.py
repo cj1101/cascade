@@ -98,23 +98,10 @@ def main():
                         print(f"Skipping Gemini artistic photo {filename} (user choice or Gemini not available)")
                         # Don't append skipped images
                 else:
-                    # Generate scoreboard image
-                    if use_gemini:
-                        # Use Gemini for scoreboard generation
-                        success = gemini_image_generator.generate_game_image_with_gemini(
-                            game_result, filename, game_type="game", week=week, is_champion=False
-                        )
-                        if not success:
-                            # Fallback to default if Gemini fails
-                            print(f"Gemini generation failed, using default for {filename}")
-                            image_generator.generate_game_image(game_result, filename, game_type="game", week=week)
-                        # Always append scoreboard (either Gemini or fallback default)
-                        week_image_files.append(filename)
-                    else:
-                        # Use default PIL-based scoreboard
-                        image_generator.generate_game_image(game_result, filename, game_type="game", week=week)
-                        # Always append scoreboard
-                        week_image_files.append(filename)
+                    # Generate scoreboard image - always use PIL-based generation
+                    image_generator.generate_game_image(game_result, filename, game_type="game", week=week)
+                    # Always append scoreboard
+                    week_image_files.append(filename)
             
             # Store filenames in tracking dict
             if week not in all_images_by_week:
@@ -196,23 +183,10 @@ def main():
                 print(f"Skipping Gemini artistic photo {filename} (user choice or Gemini not available)")
                 # Don't append skipped images
         else:
-            # Generate scoreboard image
-            if use_gemini:
-                # Use Gemini for scoreboard generation
-                success = gemini_image_generator.generate_game_image_with_gemini(
-                    game_result, filename, game_type=game_type, game_number=game_number, is_champion=False
-                )
-                if not success:
-                    # Fallback to default if Gemini fails
-                    print(f"Gemini generation failed, using default for {filename}")
-                    image_generator.generate_game_image(game_result, filename, game_type=game_type, game_number=game_number)
-                # Always append scoreboard (either Gemini or fallback default)
-                tournament_image_files.append(filename)
-            else:
-                # Use default PIL-based scoreboard
-                image_generator.generate_game_image(game_result, filename, game_type=game_type, game_number=game_number)
-                # Always append scoreboard
-                tournament_image_files.append(filename)
+            # Generate scoreboard image - always use PIL-based generation
+            image_generator.generate_game_image(game_result, filename, game_type=game_type, game_number=game_number)
+            # Always append scoreboard
+            tournament_image_files.append(filename)
     
     # Add tournament images to a special key (not a week number)
     all_images_by_week['tournament'] = tournament_image_files
