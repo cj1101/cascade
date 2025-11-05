@@ -421,6 +421,17 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             draw.text((runs1_x + offset, y_pos + offset), runs1_text, fill='#000000', font=stat_label_font)
         draw.text((runs1_x + 1, y_pos + 1), runs1_text, fill='#ff6b6b', font=stat_label_font)
         draw.text((runs1_x, y_pos), runs1_text, fill='#ffffff', font=stat_label_font)
+        # Draw yellow circles for cascade runs
+        if team1_detail.cascade_runs > 0:
+            circle_radius = 7
+            circle_spacing = 6
+            circle_start_x = runs1_x + runs1_width + 15
+            circle_y = y_pos + stat_label_font_size // 2 - circle_radius
+            for i in range(team1_detail.cascade_runs):
+                circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
+                draw.ellipse([circle_x - circle_radius, circle_y - circle_radius, 
+                             circle_x + circle_radius, circle_y + circle_radius], 
+                            fill='#ffd93d', outline='#ffffff', width=1)
         y_pos += stat_spacing
         
         # Throws
@@ -432,6 +443,17 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             draw.text((throws1_x + offset, y_pos + offset), throws1_text, fill='#000000', font=stat_label_font)
         draw.text((throws1_x + 1, y_pos + 1), throws1_text, fill='#4ecdc4', font=stat_label_font)
         draw.text((throws1_x, y_pos), throws1_text, fill='#ffffff', font=stat_label_font)
+        # Draw yellow circles for cascade throws
+        if team1_detail.cascade_throws > 0:
+            circle_radius = 7
+            circle_spacing = 6
+            circle_start_x = throws1_x + throws1_width + 15
+            circle_y = y_pos + stat_label_font_size // 2 - circle_radius
+            for i in range(team1_detail.cascade_throws):
+                circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
+                draw.ellipse([circle_x - circle_radius, circle_y - circle_radius, 
+                             circle_x + circle_radius, circle_y + circle_radius], 
+                            fill='#ffd93d', outline='#ffffff', width=1)
         y_pos += stat_spacing
         
         # Kicks
@@ -443,18 +465,17 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             draw.text((kicks1_x + offset, y_pos + offset), kicks1_text, fill='#000000', font=stat_label_font)
         draw.text((kicks1_x + 1, y_pos + 1), kicks1_text, fill='#ffd93d', font=stat_label_font)
         draw.text((kicks1_x, y_pos), kicks1_text, fill='#ffffff', font=stat_label_font)
-        y_pos += stat_spacing
-        
-        # Cascade Zones
-        cascade1_total = team1_detail.cascade_runs + team1_detail.cascade_throws + team1_detail.cascade_kicks
-        cascade1_text = f"CASCADE ZONES: {cascade1_total}"
-        cascade1_bbox = draw.textbbox((0, 0), cascade1_text, font=stat_label_font)
-        cascade1_width = cascade1_bbox[2] - cascade1_bbox[0]
-        cascade1_x = scorecard1_center_x - cascade1_width // 2
-        for offset in [4, 3, 2]:
-            draw.text((cascade1_x + offset, y_pos + offset), cascade1_text, fill='#000000', font=stat_label_font)
-        draw.text((cascade1_x + 1, y_pos + 1), cascade1_text, fill='#9b59b6', font=stat_label_font)
-        draw.text((cascade1_x, y_pos), cascade1_text, fill='#ffffff', font=stat_label_font)
+        # Draw yellow circles for cascade kicks
+        if team1_detail.cascade_kicks > 0:
+            circle_radius = 7
+            circle_spacing = 6
+            circle_start_x = kicks1_x + kicks1_width + 15
+            circle_y = y_pos + stat_label_font_size // 2 - circle_radius
+            for i in range(team1_detail.cascade_kicks):
+                circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
+                draw.ellipse([circle_x - circle_radius, circle_y - circle_radius, 
+                             circle_x + circle_radius, circle_y + circle_radius], 
+                            fill='#ffd93d', outline='#ffffff', width=1)
         y_pos += stat_spacing + 20
         
         # Big Score for Team 1
@@ -489,6 +510,17 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             draw.text((runs2_x + offset, y_pos + offset), runs2_text, fill='#000000', font=stat_label_font)
         draw.text((runs2_x + 1, y_pos + 1), runs2_text, fill='#ff6b6b', font=stat_label_font)
         draw.text((runs2_x, y_pos), runs2_text, fill='#ffffff', font=stat_label_font)
+        # Draw yellow circles for cascade runs
+        if team2_detail.cascade_runs > 0:
+            circle_radius = 7
+            circle_spacing = 6
+            circle_start_x = runs2_x + runs2_width + 15
+            circle_y = y_pos + stat_label_font_size // 2 - circle_radius
+            for i in range(team2_detail.cascade_runs):
+                circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
+                draw.ellipse([circle_x - circle_radius, circle_y - circle_radius, 
+                             circle_x + circle_radius, circle_y + circle_radius], 
+                            fill='#ffd93d', outline='#ffffff', width=1)
         y_pos += stat_spacing
         
         # Throws
@@ -500,6 +532,17 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             draw.text((throws2_x + offset, y_pos + offset), throws2_text, fill='#000000', font=stat_label_font)
         draw.text((throws2_x + 1, y_pos + 1), throws2_text, fill='#4ecdc4', font=stat_label_font)
         draw.text((throws2_x, y_pos), throws2_text, fill='#ffffff', font=stat_label_font)
+        # Draw yellow circles for cascade throws
+        if team2_detail.cascade_throws > 0:
+            circle_radius = 7
+            circle_spacing = 6
+            circle_start_x = throws2_x + throws2_width + 15
+            circle_y = y_pos + stat_label_font_size // 2 - circle_radius
+            for i in range(team2_detail.cascade_throws):
+                circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
+                draw.ellipse([circle_x - circle_radius, circle_y - circle_radius, 
+                             circle_x + circle_radius, circle_y + circle_radius], 
+                            fill='#ffd93d', outline='#ffffff', width=1)
         y_pos += stat_spacing
         
         # Kicks
@@ -511,18 +554,17 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             draw.text((kicks2_x + offset, y_pos + offset), kicks2_text, fill='#000000', font=stat_label_font)
         draw.text((kicks2_x + 1, y_pos + 1), kicks2_text, fill='#ffd93d', font=stat_label_font)
         draw.text((kicks2_x, y_pos), kicks2_text, fill='#ffffff', font=stat_label_font)
-        y_pos += stat_spacing
-        
-        # Cascade Zones
-        cascade2_total = team2_detail.cascade_runs + team2_detail.cascade_throws + team2_detail.cascade_kicks
-        cascade2_text = f"CASCADE ZONES: {cascade2_total}"
-        cascade2_bbox = draw.textbbox((0, 0), cascade2_text, font=stat_label_font)
-        cascade2_width = cascade2_bbox[2] - cascade2_bbox[0]
-        cascade2_x = scorecard2_center_x - cascade2_width // 2
-        for offset in [4, 3, 2]:
-            draw.text((cascade2_x + offset, y_pos + offset), cascade2_text, fill='#000000', font=stat_label_font)
-        draw.text((cascade2_x + 1, y_pos + 1), cascade2_text, fill='#9b59b6', font=stat_label_font)
-        draw.text((cascade2_x, y_pos), cascade2_text, fill='#ffffff', font=stat_label_font)
+        # Draw yellow circles for cascade kicks
+        if team2_detail.cascade_kicks > 0:
+            circle_radius = 7
+            circle_spacing = 6
+            circle_start_x = kicks2_x + kicks2_width + 15
+            circle_y = y_pos + stat_label_font_size // 2 - circle_radius
+            for i in range(team2_detail.cascade_kicks):
+                circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
+                draw.ellipse([circle_x - circle_radius, circle_y - circle_radius, 
+                             circle_x + circle_radius, circle_y + circle_radius], 
+                            fill='#ffd93d', outline='#ffffff', width=1)
         y_pos += stat_spacing + 20
         
         # Big Score for Team 2
@@ -548,10 +590,421 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             img.paste(shadow_img, (loser_logo_x - 5, loser_logo_y - 5), shadow_img)
             img.paste(loser_logo, (loser_logo_x, loser_logo_y), loser_logo)
         
+        # Draw legend for Cascade Zone indicator
+        legend_font_size = 26
+        try:
+            legend_font = ImageFont.truetype("arial.ttf", legend_font_size)
+        except:
+            try:
+                legend_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", legend_font_size)
+            except:
+                legend_font = ImageFont.load_default()
+        
+        legend_y = height - 80
+        legend_circle_radius = 7
+        legend_circle_x = width // 2 - 90
+        legend_circle_y = legend_y + legend_font_size // 2 - legend_circle_radius
+        draw.ellipse([legend_circle_x - legend_circle_radius, legend_circle_y - legend_circle_radius,
+                     legend_circle_x + legend_circle_radius, legend_circle_y + legend_circle_radius],
+                    fill='#ffd93d', outline='#ffffff', width=1)
+        
+        legend_text = "= Cascade Zone"
+        legend_text_bbox = draw.textbbox((0, 0), legend_text, font=legend_font)
+        legend_text_width = legend_text_bbox[2] - legend_text_bbox[0]
+        legend_text_x = legend_circle_x + legend_circle_radius + 10
+        draw.text((legend_text_x, legend_y), legend_text, fill='#ffffff', font=legend_font)
+        
         # Save image
         img.save(filename)
         return True
     except Exception as e:
         print(f"Error generating image {filename}: {e}")
+        return False
+
+
+def generate_tournament_bracket(teams, filename, round_stage='quarterfinals', quarterfinal_winners=None, semifinal_winners=None):
+    """Generate a tournament bracket image showing teams in bracket format with logos
+    round_stage: 'quarterfinals', 'semifinals', or 'finals'
+    quarterfinal_winners: List of 4 teams (winners of quarterfinals) - needed for semifinals/finals
+    semifinal_winners: List of 2 teams (winners of semifinals) - needed for finals
+    """
+    try:
+        # Sort teams by wins, then by point difference (same as tournament seeding)
+        sorted_teams = sorted(teams, key=lambda t: (t.wins, t.points_for - t.points_against), reverse=True)
+        
+        # Create square image (1:1 aspect ratio) for Instagram
+        width, height = 1600, 1600
+        img = Image.new('RGB', (width, height), color='#0a0a1a')
+        draw = ImageDraw.Draw(img)
+        
+        # Draw gradient background
+        draw_gradient_background(img, width, height, '#0a0a1a', '#1a1a2e', 'vertical')
+        
+        # Try to load fonts
+        try:
+            title_font = ImageFont.truetype("arial.ttf", 64)
+            round_font = ImageFont.truetype("arial.ttf", 40)
+            team_font = ImageFont.truetype("arial.ttf", 28)
+            seed_font = ImageFont.truetype("arial.ttf", 20)
+        except:
+            try:
+                title_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 64)
+                round_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 40)
+                team_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 28)
+                seed_font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 20)
+            except:
+                title_font = ImageFont.load_default()
+                round_font = ImageFont.load_default()
+                team_font = ImageFont.load_default()
+                seed_font = ImageFont.load_default()
+        
+        # Draw title
+        title = "TOURNAMENT BRACKET"
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_width = title_bbox[2] - title_bbox[0]
+        title_x = (width - title_width) // 2
+        title_y = 30
+        
+        # Title with shadow
+        for offset in [5, 4, 3, 2]:
+            draw.text((title_x + offset, title_y + offset), title, fill='#000000', font=title_font)
+        draw.text((title_x, title_y), title, fill='#4ecdc4', font=title_font)
+        
+        # Constants for bracket layout (adjusted for square format)
+        bracket_y_start = 120
+        match_height = 140
+        match_spacing = 160
+        logo_size = 60
+        
+        if round_stage == 'quarterfinals':
+            # Show all 8 teams in quarterfinals
+            qf_start_x = 100
+            sf_start_x = 600
+            final_start_x = 1100
+            box_width = 450
+            
+            # Quarterfinals section
+            round_label = "Quarterfinals"
+            draw.text((qf_start_x, bracket_y_start - 50), round_label, fill='#ffffff', font=round_font)
+            
+            qf_matchups = [
+                (sorted_teams[0], sorted_teams[7]),  # 1 vs 8
+                (sorted_teams[1], sorted_teams[6]),  # 2 vs 7
+                (sorted_teams[2], sorted_teams[5]),  # 3 vs 6
+                (sorted_teams[3], sorted_teams[4])   # 4 vs 5
+            ]
+            
+            # Draw quarterfinal matchups
+            for i, (team1, team2) in enumerate(qf_matchups):
+                y_pos = bracket_y_start + i * match_spacing
+                
+                # Draw matchup box
+                box_height = match_height
+                box_x = qf_start_x
+                box_y = y_pos
+                
+                # Background box for matchup
+                draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], 
+                              fill='#1a1a2e', outline='#4ecdc4', width=3)
+                
+                # Draw team 1 (top)
+                team1_y = box_y + 8
+                team1_seed = sorted_teams.index(team1) + 1
+                
+                # Load and draw team1 logo
+                logo1 = None
+                logo1_path = os.path.join(config.LOGOS_DIRECTORY, team1.get_logo_filename())
+                for logo_file in [logo1_path, logo1_path.replace("'", "'"), logo1_path.replace("'", "'")]:
+                    try:
+                        if os.path.exists(logo_file):
+                            logo1 = Image.open(logo_file).convert('RGBA')
+                            logo1 = logo1.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+                            break
+                    except:
+                        continue
+                
+                if logo1:
+                    img.paste(logo1, (box_x + 8, team1_y), logo1)
+                
+                # Draw team 1 name and seed
+                seed_text = f"#{team1_seed}"
+                draw.text((box_x + 80, team1_y + 3), seed_text, fill='#888888', font=seed_font)
+                team1_text = team1.name
+                # Truncate long team names
+                if len(team1_text) > 20:
+                    team1_text = team1_text[:17] + "..."
+                draw.text((box_x + 80, team1_y + 20), team1_text, fill='#ffffff', font=team_font)
+                
+                # Draw team 2 (bottom)
+                team2_y = box_y + 70
+                team2_seed = sorted_teams.index(team2) + 1
+                
+                # Load and draw team2 logo
+                logo2 = None
+                logo2_path = os.path.join(config.LOGOS_DIRECTORY, team2.get_logo_filename())
+                for logo_file in [logo2_path, logo2_path.replace("'", "'"), logo2_path.replace("'", "'")]:
+                    try:
+                        if os.path.exists(logo_file):
+                            logo2 = Image.open(logo_file).convert('RGBA')
+                            logo2 = logo2.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+                            break
+                    except:
+                        continue
+                
+                if logo2:
+                    img.paste(logo2, (box_x + 8, team2_y), logo2)
+                
+                # Draw team 2 name and seed
+                seed_text = f"#{team2_seed}"
+                draw.text((box_x + 80, team2_y + 3), seed_text, fill='#888888', font=seed_font)
+                team2_text = team2.name
+                # Truncate long team names
+                if len(team2_text) > 20:
+                    team2_text = team2_text[:17] + "..."
+                draw.text((box_x + 80, team2_y + 20), team2_text, fill='#ffffff', font=team_font)
+                
+                # Draw line connecting to semifinal (light gray, dashed appearance)
+                line_start_x = box_x + box_width
+                line_start_y = box_y + box_height // 2
+                line_end_x = sf_start_x
+                
+                # Connect QF1 and QF2 to SF1, QF3 and QF4 to SF2
+                if i == 0:  # QF1 -> top of SF1
+                    line_end_y = bracket_y_start + 25
+                elif i == 1:  # QF2 -> bottom of SF1
+                    line_end_y = bracket_y_start + match_height - 25
+                elif i == 2:  # QF3 -> top of SF2
+                    line_end_y = bracket_y_start + match_spacing * 2 + 25
+                else:  # QF4 -> bottom of SF2
+                    line_end_y = bracket_y_start + match_spacing * 2 + match_height - 25
+                
+                # Draw connecting line
+                draw.line([(line_start_x, line_start_y), (line_start_x + 40, line_start_y)], 
+                         fill='#4ecdc4', width=2)
+                draw.line([(line_start_x + 40, line_start_y), (line_start_x + 40, line_end_y)], 
+                         fill='#4ecdc4', width=2)
+                draw.line([(line_start_x + 40, line_end_y), (line_end_x, line_end_y)], 
+                         fill='#4ecdc4', width=2)
+            
+            # Semifinals section (placeholders)
+            round_label = "Semifinals"
+            draw.text((sf_start_x, bracket_y_start - 50), round_label, fill='#666666', font=round_font)
+            
+            for i in range(2):
+                y_pos = bracket_y_start + i * match_spacing * 2
+                box_height = match_height
+                box_x = sf_start_x
+                box_y = y_pos
+                draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], 
+                              fill='#1a1a2e', outline='#666666', width=2)
+                placeholder_text = "Winner"
+                draw.text((box_x + 20, box_y + 50), placeholder_text, fill='#666666', font=team_font)
+                
+                # Draw line to final
+                line_start_x = box_x + box_width
+                line_start_y = box_y + box_height // 2
+                line_end_x = final_start_x
+                final_center_y = bracket_y_start + match_spacing + match_height // 2
+                
+                if i == 0:
+                    line_end_y = final_center_y - 30
+                else:
+                    line_end_y = final_center_y + 30
+                
+                draw.line([(line_start_x, line_start_y), (line_start_x + 40, line_start_y)], 
+                         fill='#666666', width=2)
+                draw.line([(line_start_x + 40, line_start_y), (line_start_x + 40, line_end_y)], 
+                         fill='#666666', width=2)
+                draw.line([(line_start_x + 40, line_end_y), (line_end_x, line_end_y)], 
+                         fill='#666666', width=2)
+            
+            # Final section (placeholder)
+            round_label = "Final"
+            draw.text((final_start_x, bracket_y_start - 50), round_label, fill='#666666', font=round_font)
+            y_pos = bracket_y_start + match_spacing
+            box_height = match_height + 20
+            box_width = 400
+            box_x = final_start_x
+            box_y = y_pos
+            draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], 
+                          fill='#1a1a2e', outline='#666666', width=2)
+            placeholder_text = "Winner"
+            draw.text((box_x + 20, box_y + 60), placeholder_text, fill='#666666', font=team_font)
+            
+        elif round_stage == 'semifinals' and quarterfinal_winners:
+            # Show semifinal matchups with QF winners
+            sf_start_x = 300
+            final_start_x = 900
+            box_width = 500
+            
+            # Semifinals section
+            round_label = "Semifinals"
+            draw.text((sf_start_x, bracket_y_start - 50), round_label, fill='#ffffff', font=round_font)
+            
+            sf_matchups = [
+                (quarterfinal_winners[0], quarterfinal_winners[1]),
+                (quarterfinal_winners[2], quarterfinal_winners[3])
+            ]
+            
+            # Draw semifinal matchups
+            for i, (team1, team2) in enumerate(sf_matchups):
+                y_pos = bracket_y_start + i * match_spacing * 2
+                
+                box_height = match_height
+                box_x = sf_start_x
+                box_y = y_pos
+                
+                draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], 
+                              fill='#1a1a2e', outline='#4ecdc4', width=3)
+                
+                # Team 1
+                team1_y = box_y + 8
+                logo1 = None
+                logo1_path = os.path.join(config.LOGOS_DIRECTORY, team1.get_logo_filename())
+                for logo_file in [logo1_path, logo1_path.replace("'", "'"), logo1_path.replace("'", "'")]:
+                    try:
+                        if os.path.exists(logo_file):
+                            logo1 = Image.open(logo_file).convert('RGBA')
+                            logo1 = logo1.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+                            break
+                    except:
+                        continue
+                
+                if logo1:
+                    img.paste(logo1, (box_x + 8, team1_y), logo1)
+                
+                team1_text = team1.name
+                if len(team1_text) > 22:
+                    team1_text = team1_text[:19] + "..."
+                draw.text((box_x + 80, team1_y + 20), team1_text, fill='#ffffff', font=team_font)
+                
+                # Team 2
+                team2_y = box_y + 70
+                logo2 = None
+                logo2_path = os.path.join(config.LOGOS_DIRECTORY, team2.get_logo_filename())
+                for logo_file in [logo2_path, logo2_path.replace("'", "'"), logo2_path.replace("'", "'")]:
+                    try:
+                        if os.path.exists(logo_file):
+                            logo2 = Image.open(logo_file).convert('RGBA')
+                            logo2 = logo2.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+                            break
+                    except:
+                        continue
+                
+                if logo2:
+                    img.paste(logo2, (box_x + 8, team2_y), logo2)
+                
+                team2_text = team2.name
+                if len(team2_text) > 22:
+                    team2_text = team2_text[:19] + "..."
+                draw.text((box_x + 80, team2_y + 20), team2_text, fill='#ffffff', font=team_font)
+                
+                # Draw line connecting to final
+                line_start_x = box_x + box_width
+                line_start_y = box_y + box_height // 2
+                line_end_x = final_start_x
+                final_center_y = bracket_y_start + match_spacing + match_height // 2
+                
+                if i == 0:
+                    line_end_y = final_center_y - 30
+                else:
+                    line_end_y = final_center_y + 30
+                
+                draw.line([(line_start_x, line_start_y), (line_start_x + 40, line_start_y)], 
+                         fill='#4ecdc4', width=2)
+                draw.line([(line_start_x + 40, line_start_y), (line_start_x + 40, line_end_y)], 
+                         fill='#4ecdc4', width=2)
+                draw.line([(line_start_x + 40, line_end_y), (line_end_x, line_end_y)], 
+                         fill='#4ecdc4', width=2)
+            
+            # Final section (placeholder)
+            round_label = "Final"
+            draw.text((final_start_x, bracket_y_start - 50), round_label, fill='#666666', font=round_font)
+            y_pos = bracket_y_start + match_spacing
+            box_height = match_height + 20
+            box_width = 450
+            box_x = final_start_x
+            box_y = y_pos
+            draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], 
+                          fill='#1a1a2e', outline='#666666', width=2)
+            placeholder_text = "Winner"
+            draw.text((box_x + 20, box_y + 60), placeholder_text, fill='#666666', font=team_font)
+            
+        elif round_stage == 'finals' and semifinal_winners:
+            # Show final matchup with SF winners
+            final_start_x = 400
+            box_width = 700
+            
+            # Final section
+            round_label = "Final"
+            draw.text((final_start_x, bracket_y_start - 50), round_label, fill='#ffffff', font=round_font)
+            
+            y_pos = bracket_y_start + match_spacing
+            box_height = match_height + 40
+            box_x = final_start_x
+            box_y = y_pos
+            
+            draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], 
+                          fill='#1a1a2e', outline='#ffd700', width=4)
+            
+            # Team 1
+            team1 = semifinal_winners[0]
+            team1_y = box_y + 15
+            logo1 = None
+            logo1_path = os.path.join(config.LOGOS_DIRECTORY, team1.get_logo_filename())
+            for logo_file in [logo1_path, logo1_path.replace("'", "'"), logo1_path.replace("'", "'")]:
+                try:
+                    if os.path.exists(logo_file):
+                        logo1 = Image.open(logo_file).convert('RGBA')
+                        logo1 = logo1.resize((logo_size + 20, logo_size + 20), Image.Resampling.LANCZOS)
+                        break
+                except:
+                    continue
+            
+            if logo1:
+                img.paste(logo1, (box_x + 15, team1_y), logo1)
+            
+            team1_text = team1.name
+            if len(team1_text) > 25:
+                team1_text = team1_text[:22] + "..."
+            draw.text((box_x + 100, team1_y + 25), team1_text, fill='#ffffff', font=team_font)
+            
+            # Team 2
+            team2 = semifinal_winners[1]
+            team2_y = box_y + 95
+            logo2 = None
+            logo2_path = os.path.join(config.LOGOS_DIRECTORY, team2.get_logo_filename())
+            for logo_file in [logo2_path, logo2_path.replace("'", "'"), logo2_path.replace("'", "'")]:
+                try:
+                    if os.path.exists(logo_file):
+                        logo2 = Image.open(logo_file).convert('RGBA')
+                        logo2 = logo2.resize((logo_size + 20, logo_size + 20), Image.Resampling.LANCZOS)
+                        break
+                except:
+                    continue
+            
+            if logo2:
+                img.paste(logo2, (box_x + 15, team2_y), logo2)
+            
+            team2_text = team2.name
+            if len(team2_text) > 25:
+                team2_text = team2_text[:22] + "..."
+            draw.text((box_x + 100, team2_y + 25), team2_text, fill='#ffffff', font=team_font)
+        
+        # Add decorative border
+        border_width = 8
+        border_color = '#4ecdc4'
+        for i in range(3):
+            draw.rectangle([i, i, width-1-i, height-1-i], outline=border_color, width=1)
+        draw.rectangle([3, 3, width-4, height-4], outline=border_color, width=border_width)
+        
+        # Save image
+        img.save(filename)
+        print(f"Generated tournament bracket ({round_stage}): {filename}")
+        return True
+    except Exception as e:
+        print(f"Error generating tournament bracket {filename}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 

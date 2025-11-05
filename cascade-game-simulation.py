@@ -770,7 +770,7 @@ def main():
         "Cove Crushers",
         "Ember Enforcers",
         "Pinnacle Pioneers",
-        "Evan City Commies"
+        "Evan City Vanguards"
     ]
     teams = [Team(name) for name in team_names]
     

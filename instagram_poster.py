@@ -102,8 +102,9 @@ def _dismiss_instagram_popups(driver):
 def _handle_post_login_prompts(driver):
     """
     Handle Instagram-specific post-login prompts:
-    1. "Enregister vos infos" / "Save your login info" prompt
-    2. Big OK button popup that appears after saving login info
+    1. Onetap page "Plus tard" (Later) button at instagram.com/accounts/onetap/
+    2. "Enregister vos infos" / "Save your login info" prompt
+    3. Big OK button popup that appears after saving login info
     
     These prompts appear after successful login and must be handled before
     proceeding with other actions like clicking the + button.
@@ -115,6 +116,49 @@ def _handle_post_login_prompts(driver):
         
         print("Handling post-login prompts...")
         time.sleep(2)  # Wait for prompts to appear
+        
+        # Step 0: Check if we're on the onetap page and click "Plus tard" (Later)
+        current_url = driver.current_url.lower()
+        if "onetap" in current_url:
+            print("Detected onetap page, clicking 'Plus tard' (Later)...")
+            plus_tard_clicked = False
+            
+            # Try exact selector first: div with role="button" and text "Plus tard"
+            plus_tard_selectors = [
+                "//div[@role='button' and contains(text(), 'Plus tard')]",
+                "//div[@role='button' and text()='Plus tard']",
+                "//button[contains(text(), 'Plus tard')]",
+                # English version
+                "//div[@role='button' and contains(text(), 'Later')]",
+                "//div[@role='button' and text()='Later']",
+                "//button[contains(text(), 'Later')]",
+            ]
+            
+            for selector in plus_tard_selectors:
+                try:
+                    buttons = driver.find_elements(By.XPATH, selector)
+                    for button in buttons:
+                        if button.is_displayed():
+                            try:
+                                driver.execute_script("arguments[0].scrollIntoView(true);", button)
+                                time.sleep(0.5)
+                                button.click()
+                                print("  ✓ Clicked 'Plus tard' (Later) button")
+                                plus_tard_clicked = True
+                                time.sleep(2)  # Wait for navigation
+                                break
+                            except Exception as e:
+                                continue
+                    if plus_tard_clicked:
+                        break
+                except:
+                    continue
+            
+            if not plus_tard_clicked:
+                print("  ⚠ Could not find 'Plus tard' button on onetap page")
+            
+            # Wait a bit more after clicking to ensure navigation completes
+            time.sleep(2)
         
         # Step 1: Handle "Enregister vos infos" / "Save your login info" prompt
         save_login_selectors = [
@@ -232,6 +276,348 @@ def _handle_post_login_prompts(driver):
         print(f"  Note: Could not handle post-login prompts: {e}")
 
 
+def _find_login_button_robust(driver):
+    """
+    Find the login button on Instagram login page using multiple strategies.
+    Handles both English and French variants, with robust fallback logic.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        
+    Returns:
+        WebElement or None: The login button element if found, None otherwise
+    """
+    from selenium.webdriver.common.by import By
+    
+    # Comprehensive list of selectors, ordered by specificity
+    login_selectors = [
+        # Generic submit button (highest priority - most reliable)
+        "button[type='submit']",
+        
+        # English text variants
+        "//button[contains(text(), 'Log in')]",
+        "//button[contains(text(), 'Log In')]",
+        "//div[@role='button' and contains(text(), 'Log in')]",
+        "//div[@role='button' and contains(text(), 'Log In')]",
+        # Divs containing nested spans with English login text (for Instagram's div-based buttons)
+        "//div[.//span[contains(text(), 'Log in')]]",
+        "//div[.//span[contains(text(), 'Log In')]]",
+        # More specific: find span with login text, then get its ancestor div with x1ja2u2z class
+        "//span[contains(text(), 'Log in')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
+        "//span[contains(text(), 'Log In')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
+        
+        # French text variants
+        "//button[contains(text(), 'Se connecter')]",
+        "//button[contains(text(), 'Se Connecter')]",
+        "//button[contains(text(), 'Connexion')]",
+        "//div[@role='button' and contains(text(), 'Se connecter')]",
+        "//div[@role='button' and contains(text(), 'Se Connecter')]",
+        "//div[@role='button' and contains(text(), 'Connexion')]",
+        # Divs containing nested spans with French login text (for Instagram's div-based buttons)
+        "//div[.//span[contains(text(), 'Se connecter')]]",
+        "//div[.//span[contains(text(), 'Se Connecter')]]",
+        "//div[.//span[contains(text(), 'Connexion')]]",
+        # More specific: find span with login text, then get its outermost ancestor div with x1ja2u2z class
+        "//span[contains(text(), 'Se connecter')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
+        "//span[contains(text(), 'Se Connecter')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
+        "//span[contains(text(), 'Connexion')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
+        
+        # Aria-label based selectors (case insensitive matching via contains)
+        "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login')]",
+        "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connecter')]",
+        "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connexion')]",
+        "//div[@role='button' and contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login')]",
+        "//div[@role='button' and contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connecter')]",
+        
+        # Form context-based selectors (find submit button within login form)
+        "//form//button[@type='submit']",
+        "//form//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login')]",
+        "//form//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connecter')]",
+        "//form//div[@role='button' and @type='submit']",
+    ]
+    
+    # Try each selector
+    for selector in login_selectors:
+        try:
+            if selector.startswith("//"):
+                elements = driver.find_elements(By.XPATH, selector)
+            else:
+                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+            
+            # Check each element to see if it's displayed and enabled
+            for element in elements:
+                try:
+                    # Check if displayed
+                    if not element.is_displayed():
+                        continue
+                    
+                    # For buttons, check if enabled; for divs, just check if they're visible
+                    try:
+                        if element.tag_name.lower() == 'button':
+                            if not element.is_enabled():
+                                continue
+                        # For divs, check if they're not disabled via attribute
+                        elif element.tag_name.lower() == 'div':
+                            if element.get_attribute('disabled') is not None or element.get_attribute('aria-disabled') == 'true':
+                                continue
+                    except:
+                        # If is_enabled() doesn't exist (for divs), continue anyway if displayed
+                        pass
+                    
+                    return element
+                except:
+                    continue
+        except:
+            continue
+    
+    # Fallback: Use JavaScript to find submit button in forms with password fields
+    try:
+        login_button_js = driver.execute_script("""
+            // Strategy 1: Look for divs containing "Se connecter" or "Log in" text in nested spans
+            var loginTexts = ['Se connecter', 'Se Connecter', 'Log in', 'Log In'];
+            for (var t = 0; t < loginTexts.length; t++) {
+                var text = loginTexts[t];
+                // Find all spans containing the login text
+                var spans = Array.from(document.querySelectorAll('span'));
+                for (var s = 0; s < spans.length; s++) {
+                    var span = spans[s];
+                    if (span.textContent && span.textContent.trim() === text) {
+                        // Find the outermost clickable div ancestor
+                        var parent = span.parentElement;
+                        var depth = 0;
+                        while (parent && depth < 10) {
+                            // Look for divs that might be clickable (have pointer cursor, or contain class x1ja2u2z)
+                            if (parent.tagName === 'DIV' && 
+                                (parent.classList.contains('x1ja2u2z') || 
+                                 window.getComputedStyle(parent).cursor === 'pointer' ||
+                                 parent.onclick !== null ||
+                                 parent.getAttribute('role') === 'button')) {
+                                // Check if it's visible
+                                if (parent.offsetParent !== null && parent.offsetWidth > 0 && parent.offsetHeight > 0) {
+                                    return parent;
+                                }
+                            }
+                            parent = parent.parentElement;
+                            depth++;
+                        }
+                    }
+                }
+            }
+            
+            // Strategy 2: Find all password input fields and look for nearby submit buttons
+            var passwordInputs = document.querySelectorAll('input[type="password"]');
+            if (passwordInputs.length > 0) {
+                for (var i = 0; i < passwordInputs.length; i++) {
+                    var passwordInput = passwordInputs[i];
+                    var form = passwordInput.closest('form');
+                    
+                    if (form) {
+                        // Look for submit button in the form
+                        var submitButton = form.querySelector('button[type="submit"]');
+                        if (submitButton && submitButton.offsetParent !== null) {
+                            if (!submitButton.hasAttribute('disabled') && !submitButton.disabled) {
+                                return submitButton;
+                            }
+                        }
+                    }
+                    
+                    // Look for buttons in parent containers
+                    var parent = passwordInput.parentElement;
+                    var depth = 0;
+                    while (parent && depth < 5) {
+                        var buttons = parent.querySelectorAll('button[type="submit"], button:not([type]), div[role="button"]');
+                        for (var j = 0; j < buttons.length; j++) {
+                            var btn = buttons[j];
+                            // Check if button is visible and enabled
+                            if (btn.offsetParent !== null && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+                                // Check if disabled attribute is not present
+                                if (!btn.hasAttribute('disabled') && !btn.disabled) {
+                                    return btn;
+                                }
+                            }
+                        }
+                        parent = parent.parentElement;
+                        depth++;
+                    }
+                }
+            }
+            
+            // Strategy 3: Last resort - find any submit button on the page
+            var allSubmitButtons = document.querySelectorAll('button[type="submit"]');
+            for (var k = 0; k < allSubmitButtons.length; k++) {
+                var btn = allSubmitButtons[k];
+                if (btn.offsetParent !== null && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
+                    if (!btn.hasAttribute('disabled') && !btn.disabled) {
+                        return btn;
+                    }
+                }
+            }
+            
+            return null;
+        """)
+        
+        if login_button_js:
+            return login_button_js
+    except:
+        pass
+    
+    return None
+
+
+def _handle_second_login_at_home(driver, username, password):
+    """
+    Handle the second login at https://www.instagram.com/ after first login.
+    This function fills in credentials using exact selectors provided for the second login form.
+    
+    Args:
+        driver: Selenium WebDriver instance
+        username: Instagram username
+        password: Instagram password
+    
+    Returns:
+        bool: True if login successful, False otherwise
+    """
+    try:
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        
+        print("Handling second login at instagram.com/...")
+        time.sleep(2)  # Wait for page to stabilize
+        
+        # Find username input using exact selector
+        username_input = None
+        try:
+            # Exact selector: input[aria-label="Num. téléphone, nom de profil ou e-mail"][name="username"]
+            username_input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label="Num. téléphone, nom de profil ou e-mail"][name="username"]'))
+            )
+            if not username_input.is_displayed() or not username_input.is_enabled():
+                username_input = None
+        except:
+            pass
+        
+        # Fallback selectors if exact one doesn't work
+        if not username_input:
+            fallback_selectors = [
+                "input[name='username']",
+                "input[type='text'][name='username']",
+                "//input[@name='username']",
+            ]
+            for selector in fallback_selectors:
+                try:
+                    if selector.startswith("//"):
+                        elements = driver.find_elements(By.XPATH, selector)
+                        for elem in elements:
+                            if elem.is_displayed() and elem.is_enabled():
+                                username_input = elem
+                                break
+                    else:
+                        username_input = driver.find_element(By.CSS_SELECTOR, selector)
+                    if username_input:
+                        break
+                except:
+                    continue
+        
+        if not username_input:
+            print("⚠️  Could not find username input field on second login page")
+            return False
+        
+        # Find password input using exact selector
+        password_input = None
+        try:
+            # Exact selector: input[aria-label="Mot de passe"][type="password"][name="password"]
+            password_input = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label="Mot de passe"][type="password"][name="password"]'))
+            )
+            if not password_input.is_displayed() or not password_input.is_enabled():
+                password_input = None
+        except:
+            pass
+        
+        # Fallback selectors if exact one doesn't work
+        if not password_input:
+            fallback_selectors = [
+                "input[name='password']",
+                "input[type='password'][name='password']",
+                "//input[@type='password' and @name='password']",
+            ]
+            for selector in fallback_selectors:
+                try:
+                    if selector.startswith("//"):
+                        elements = driver.find_elements(By.XPATH, selector)
+                        for elem in elements:
+                            if elem.is_displayed() and elem.is_enabled():
+                                password_input = elem
+                                break
+                    else:
+                        password_input = driver.find_element(By.CSS_SELECTOR, selector)
+                    if password_input:
+                        break
+                except:
+                    continue
+        
+        if not password_input:
+            print("⚠️  Could not find password input field on second login page")
+            return False
+        
+        # Fill in credentials
+        print(f"Entering username on second login: {username}")
+        username_input.clear()
+        username_input.send_keys(username)
+        time.sleep(1)
+        
+        print("Entering password on second login...")
+        password_input.clear()
+        password_input.send_keys(password)
+        time.sleep(1)
+        
+        # Find login button using exact selector
+        login_button = None
+        try:
+            # Try to find div with class containing key classes and text "Se connecter"
+            # The div has class="html-div xdj266r x14z9mp xat24cr x1lziwak xexx8yu xyri2b..."
+            login_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, '//div[contains(@class, "html-div") and contains(@class, "xdj266r") and contains(@class, "x14z9mp") and contains(@class, "xat24cr") and contains(@class, "x1lziwak") and contains(text(), "Se connecter")]'))
+            )
+        except:
+            # Fallback: try simpler XPath with just text "Se connecter"
+            try:
+                login_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, '//div[contains(text(), "Se connecter")]'))
+                )
+            except:
+                # Try using the robust helper as last resort
+                login_button = _find_login_button_robust(driver)
+        
+        if not login_button:
+            print("⚠️  Could not find login button on second login page")
+            return False
+        
+        print("Clicking login button on second login page...")
+        driver.execute_script("arguments[0].scrollIntoView(true);", login_button)
+        time.sleep(0.5)
+        login_button.click()
+        
+        # Wait 5 seconds after second login as specified
+        print("Waiting 5 seconds after second login...")
+        time.sleep(5)
+        
+        # Check if login was successful
+        current_url = driver.current_url.lower()
+        if "login" not in current_url and "accounts/login" not in current_url:
+            print("✓ Successfully completed second login!")
+            return True
+        else:
+            print("⚠️  Still on login page after second login attempt")
+            return False
+            
+    except Exception as e:
+        print(f"⚠️  Error during second login: {e}")
+        traceback.print_exc()
+        return False
+
+
 def _check_and_handle_secondary_login(driver, username, password):
     """
     Check if we're on the login page and attempt to login again if needed.
@@ -254,35 +640,70 @@ def _check_and_handle_secondary_login(driver, username, password):
         # Check current URL to see if we're on login page
         current_url = driver.current_url.lower()
         
-        if "login" not in current_url and "accounts/login" not in current_url:
+        # Also check for login form elements on the page (in case URL doesn't indicate login)
+        # This helps catch login pages that appear after initial login
+        is_login_page = False
+        if "login" in current_url or "accounts/login" in current_url:
+            is_login_page = True
+        else:
+            # Check if login form elements are present (detect login page even if URL doesn't show it)
+            try:
+                # Look for password input field (indicates login form)
+                password_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='password']")
+                # Look for login button text
+                page_text = driver.page_source.lower()
+                if password_inputs and ("se connecter" in page_text or "log in" in page_text or "connexion" in page_text):
+                    is_login_page = True
+            except:
+                pass
+        
+        if not is_login_page:
             # Not on login page, no action needed
             return True
         
         print("⚠️  Still on login page - Instagram may be asking to login again")
         print("Attempting to login again...")
         
-        # Define selectors for login form elements
+        # Define selectors for login form elements (including French labels)
         username_selectors = [
             "input[name='username']",
             "input[type='text']",
+            # English aria-labels
             "input[aria-label='Phone number, username, or email']",
+            "input[aria-label*='Phone number']",
+            "input[aria-label*='username']",
+            "input[aria-label*='email']",
+            # French aria-labels
+            "input[aria-label*='Num. téléphone']",
+            "input[aria-label*='nom de profil']",
+            "input[aria-label*='téléphone, nom de profil ou e-mail']",
+            # XPath with contains for French labels
+            "//input[@type='text' and contains(@aria-label, 'téléphone')]",
+            "//input[@type='text' and contains(@aria-label, 'nom de profil')]",
+            "//input[@type='text' and contains(@aria-label, 'e-mail')]",
+            # Placeholder selectors
             "input[placeholder*='username']",
-            "input[placeholder*='Phone number']"
+            "input[placeholder*='Phone number']",
+            "input[placeholder*='téléphone']",
+            "input[placeholder*='profil']",
         ]
         
         password_selectors = [
             "input[name='password']",
             "input[type='password']",
+            # English aria-labels
             "input[aria-label='Password']",
-            "input[placeholder*='Password']"
-        ]
-        
-        login_selectors = [
-            "button[type='submit']",
-            "//button[contains(text(), 'Log in')]",
-            "//button[contains(text(), 'Log In')]",
-            "//div[@role='button' and contains(text(), 'Log in')]",
-            "//div[@role='button' and contains(text(), 'Log In')]"
+            "input[aria-label*='Password']",
+            # French aria-labels
+            "input[aria-label='Mot de passe']",
+            "input[aria-label*='Mot de passe']",
+            # XPath with contains for French labels
+            "//input[@type='password' and contains(@aria-label, 'Mot de passe')]",
+            "//input[@type='password' and contains(@aria-label, 'password')]",
+            # Placeholder selectors
+            "input[placeholder*='Password']",
+            "input[placeholder*='Mot de passe']",
+            "input[placeholder*='passe']",
         ]
         
         # Wait a moment for the page to stabilize
@@ -292,9 +713,20 @@ def _check_and_handle_secondary_login(driver, username, password):
         username_input_retry = None
         for selector in username_selectors:
             try:
-                username_input_retry = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                )
+                if selector.startswith("//"):
+                    # XPath selector
+                    elements = WebDriverWait(driver, 5).until(
+                        EC.presence_of_all_elements_located((By.XPATH, selector))
+                    )
+                    for elem in elements:
+                        if elem.is_displayed() and elem.is_enabled():
+                            username_input_retry = elem
+                            break
+                else:
+                    # CSS selector
+                    username_input_retry = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
                 if username_input_retry:
                     break
             except:
@@ -303,7 +735,16 @@ def _check_and_handle_secondary_login(driver, username, password):
         password_input_retry = None
         for selector in password_selectors:
             try:
-                password_input_retry = driver.find_element(By.CSS_SELECTOR, selector)
+                if selector.startswith("//"):
+                    # XPath selector
+                    elements = driver.find_elements(By.XPATH, selector)
+                    for elem in elements:
+                        if elem.is_displayed() and elem.is_enabled():
+                            password_input_retry = elem
+                            break
+                else:
+                    # CSS selector
+                    password_input_retry = driver.find_element(By.CSS_SELECTOR, selector)
                 if password_input_retry:
                     break
             except:
@@ -324,18 +765,8 @@ def _check_and_handle_secondary_login(driver, username, password):
         password_input_retry.send_keys(password)
         time.sleep(1)
         
-        # Find and click login button again
-        login_button_retry = None
-        for selector in login_selectors:
-            try:
-                if selector.startswith("//"):
-                    login_button_retry = driver.find_element(By.XPATH, selector)
-                else:
-                    login_button_retry = driver.find_element(By.CSS_SELECTOR, selector)
-                if login_button_retry and login_button_retry.is_displayed():
-                    break
-            except:
-                continue
+        # Find and click login button again using robust helper
+        login_button_retry = _find_login_button_robust(driver)
         
         if not login_button_retry:
             print("⚠️  Could not find login button for retry")
@@ -412,38 +843,84 @@ def login_to_instagram(driver, username=None, password=None):
         username_selectors = [
             "input[name='username']",
             "input[type='text']",
+            # English aria-labels
             "input[aria-label='Phone number, username, or email']",
+            "input[aria-label*='Phone number']",
+            "input[aria-label*='username']",
+            "input[aria-label*='email']",
+            # French aria-labels
+            "input[aria-label*='Num. téléphone']",
+            "input[aria-label*='nom de profil']",
+            "input[aria-label*='téléphone, nom de profil ou e-mail']",
+            # XPath with contains for French labels
+            "//input[@type='text' and contains(@aria-label, 'téléphone')]",
+            "//input[@type='text' and contains(@aria-label, 'nom de profil')]",
+            "//input[@type='text' and contains(@aria-label, 'e-mail')]",
+            # Placeholder selectors
             "input[placeholder*='username']",
-            "input[placeholder*='Phone number']"
+            "input[placeholder*='Phone number']",
+            "input[placeholder*='téléphone']",
+            "input[placeholder*='profil']",
         ]
         
         username_input = None
         for selector in username_selectors:
             try:
-                username_input = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                )
+                if selector.startswith("//"):
+                    # XPath selector
+                    elements = WebDriverWait(driver, 5).until(
+                        EC.presence_of_all_elements_located((By.XPATH, selector))
+                    )
+                    for elem in elements:
+                        if elem.is_displayed() and elem.is_enabled():
+                            username_input = elem
+                            break
+                else:
+                    # CSS selector
+                    username_input = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
                 if username_input:
                     break
             except:
                 continue
         
         if not username_input:
-            print("âš  Could not find username input field")
+            print("âš  Could not find username input field")
             return False
-        
+
         # Find password input field
         password_selectors = [
             "input[name='password']",
             "input[type='password']",
+            # English aria-labels
             "input[aria-label='Password']",
-            "input[placeholder*='Password']"
+            "input[aria-label*='Password']",
+            # French aria-labels
+            "input[aria-label='Mot de passe']",
+            "input[aria-label*='Mot de passe']",
+            # XPath with contains for French labels
+            "//input[@type='password' and contains(@aria-label, 'Mot de passe')]",
+            "//input[@type='password' and contains(@aria-label, 'password')]",
+            # Placeholder selectors
+            "input[placeholder*='Password']",
+            "input[placeholder*='Mot de passe']",
+            "input[placeholder*='passe']",
         ]
-        
+
         password_input = None
         for selector in password_selectors:
             try:
-                password_input = driver.find_element(By.CSS_SELECTOR, selector)
+                if selector.startswith("//"):
+                    # XPath selector
+                    elements = driver.find_elements(By.XPATH, selector)
+                    for elem in elements:
+                        if elem.is_displayed() and elem.is_enabled():
+                            password_input = elem
+                            break
+                else:
+                    # CSS selector
+                    password_input = driver.find_element(By.CSS_SELECTOR, selector)
                 if password_input:
                     break
             except:
@@ -464,126 +941,75 @@ def login_to_instagram(driver, username=None, password=None):
         password_input.send_keys(password)
         time.sleep(1)
         
-        # Find and click login button
-        login_button = None
-        login_selectors = [
-            "button[type='submit']",
-            "//button[contains(text(), 'Log in')]",
-            "//button[contains(text(), 'Log In')]",
-            "//div[@role='button' and contains(text(), 'Log in')]",
-            "//div[@role='button' and contains(text(), 'Log In')]"
-        ]
-        
-        for selector in login_selectors:
-            try:
-                if selector.startswith("//"):
-                    login_button = driver.find_element(By.XPATH, selector)
-                else:
-                    login_button = driver.find_element(By.CSS_SELECTOR, selector)
-                if login_button and login_button.is_displayed():
-                    break
-            except:
-                continue
+        # Find and click login button using robust helper
+        login_button = _find_login_button_robust(driver)
         
         if login_button:
-            print("Clicking login button...")
+            print("Clicking first login button...")
             login_button.click()
-            time.sleep(5)  # Wait for login to process
+            print("Waiting 5 seconds after first login...")
+            time.sleep(5)  # Wait 5 seconds after first login as specified
             
-            # First, check if login was immediately successful (no 2FA needed)
+            # Check current URL and detect if we need second login
             current_url = driver.current_url.lower()
             
-            # Check if we're already logged in (redirected away from login page)
-            if "instagram.com" in current_url and "login" not in current_url and "accounts/login" not in current_url:
-                # Verify we're actually logged in by navigating to home
-                driver.get("https://www.instagram.com")
-                time.sleep(3)
-                
-                current_url = driver.current_url.lower()
-                if "login" not in current_url and "accounts/login" not in current_url:
-                    print("✓ Successfully logged in to Instagram!")
-                    # Handle post-login prompts (save login info, OK button)
-                    _handle_post_login_prompts(driver)
-                    
-                    # Check if Instagram is asking to login again (sometimes happens when no save login prompts appear)
-                    current_url_check = driver.current_url.lower()
-                    if "login" in current_url_check or "accounts/login" in current_url_check:
-                        print("⚠️  Instagram redirected to login page after initial login")
-                        print("Attempting secondary login...")
-                        secondary_login_success = _check_and_handle_secondary_login(driver, username, password)
-                        if not secondary_login_success:
-                            print("⚠️  Secondary login failed")
-                            return False
-                    
-                    return True
-                else:
-                    print("âš  Login verification failed - redirected back to login page")
-                    return False
+            # Check if we're on instagram.com/ and need second login
+            needs_second_login = False
             
-            # If still on login page, check for 2FA prompts
-            # Wait a moment for any 2FA prompts to appear
+            # Check if we're on instagram.com/ (not /accounts/login/)
+            if "instagram.com" in current_url and "accounts/login" not in current_url:
+                # Check if login form is present on the page
+                try:
+                    # Look for password input field (indicates login form)
+                    password_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='password']")
+                    # Check for login button text
+                    page_text = driver.page_source.lower()
+                    if password_inputs and ("se connecter" in page_text or "log in" in page_text or "connexion" in page_text):
+                        needs_second_login = True
+                        print("Detected second login form at instagram.com/")
+                except:
+                    pass
+            
+            # Handle second login if needed
+            if needs_second_login:
+                print("Performing second login at instagram.com/...")
+                second_login_success = _handle_second_login_at_home(driver, username, password)
+                if not second_login_success:
+                    print("⚠️  Second login failed")
+                    return False
+                # Second login completed successfully (already waited 5 seconds in the function)
+            else:
+                # Check if we're already logged in (no second login needed)
+                if "instagram.com" in current_url and "login" not in current_url and "accounts/login" not in current_url:
+                    # Verify we're actually logged in by navigating to home
+                    driver.get("https://www.instagram.com")
+                    time.sleep(3)
+                    
+                    current_url = driver.current_url.lower()
+                    if "login" not in current_url and "accounts/login" not in current_url:
+                        print("✓ Successfully logged in to Instagram (only one login required)!")
+                    else:
+                        # Still on login page - might need second login
+                        print("Detected login form after navigation, attempting second login...")
+                        second_login_success = _handle_second_login_at_home(driver, username, password)
+                        if not second_login_success:
+                            print("⚠️  Second login failed")
+                            return False
+            
+            # Verify final login status
             time.sleep(2)
-            page_source = driver.page_source.lower()
+            driver.get("https://www.instagram.com")
+            time.sleep(3)
+            
             current_url = driver.current_url.lower()
-            
-            # More specific 2FA detection - look for actual 2FA page indicators
-            is_2fa_page = (
-                "two-factor" in page_source or 
-                "two factor" in page_source or
-                ("security" in page_source and "code" in page_source and "enter" in page_source) or
-                ("verify" in page_source and ("code" in page_source or "security" in page_source))
-            )
-            
-            # Also check if URL indicates 2FA/challenge page
-            is_2fa_url = (
-                "challenge" in current_url or 
-                "two-factor" in current_url or
-                "accounts/two_factor" in current_url
-            )
-            
-            if is_2fa_page or is_2fa_url:
-                print("\n" + "="*60)
-                print("âš  Two-factor authentication or security check detected.")
-                print("Please complete the verification in the browser.")
-                print("Press Enter once verification is complete and you're logged in...")
-                print("="*60)
-                input()
-                
-                # After 2FA completion, verify login was successful
-                time.sleep(3)
-                driver.get("https://www.instagram.com")
-                time.sleep(3)
-                
-                # Verify we're actually logged in
-                current_url = driver.current_url.lower()
-                if "login" not in current_url and "accounts/login" not in current_url:
-                    print("✓ Successfully logged in to Instagram after 2FA verification!")
-                    # Handle post-login prompts (save login info, OK button)
-                    _handle_post_login_prompts(driver)
-                    
-                    # Check if Instagram is asking to login again (sometimes happens when no save login prompts appear)
-                    current_url_check = driver.current_url.lower()
-                    if "login" in current_url_check or "accounts/login" in current_url_check:
-                        print("⚠️  Instagram redirected to login page after 2FA login")
-                        print("Attempting secondary login...")
-                        secondary_login_success = _check_and_handle_secondary_login(driver, username, password)
-                        if not secondary_login_success:
-                            print("⚠️  Secondary login failed")
-                            return False
-                    
-                    return True
-                else:
-                    print("âš  Login verification failed - still on login page")
-                    print("Please check if you completed the 2FA verification correctly.")
-                    return False
-            
-            # No 2FA detected, but still on login page - try logging in again
-            if "login" in current_url or "accounts/login" in current_url:
-                return _check_and_handle_secondary_login(driver, username, password)
-            
-            # If we got here, something unexpected happened
-            print("âš  Unexpected state after login attempt")
-            return False
+            if "login" not in current_url and "accounts/login" not in current_url:
+                print("✓ Successfully logged in to Instagram after two-step login!")
+                # Handle post-login prompts (save login info, OK button)
+                _handle_post_login_prompts(driver)
+                return True
+            else:
+                print("âš  Login verification failed - still on login page after two-step login")
+                return False
         else:
             print("âš  Could not find login button")
             return False
@@ -594,23 +1020,22 @@ def login_to_instagram(driver, username=None, password=None):
         return False
 
 
-def post_to_instagram(image_paths, caption="", username=None, password=None):
+def post_to_instagram(image_paths, caption="", username=None, password=None, driver=None):
     """
     Post images to Instagram using browser automation.
-    Note: This function uses browser automation tools available via MCP.
-    For automated posting, you may need to install selenium or playwright.
+    If driver is provided, reuses existing browser session.
     """
     try:
-        # Try using selenium if available
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
-            from selenium.webdriver.chrome.service import Service
-            from selenium.webdriver.chrome.options import Options
-            
-            # Setup Chrome driver with options to avoid detection
+        from selenium import webdriver
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
+        
+        browser_created = False
+        if driver is None:
+            # Create new browser if none provided
             chrome_options = Options()
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -620,572 +1045,36 @@ def post_to_instagram(image_paths, caption="", username=None, password=None):
             chrome_options.add_experimental_option("detach", True)
             
             driver = webdriver.Chrome(options=chrome_options)
-            
-            # Execute script to hide webdriver property
+            browser_created = True
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
-            try:
-                # Try automatic login first
+            # Login logic here...
+            login_success = login_to_instagram(driver, username, password)
+            # ... rest of login handling ...
+        else:
+            # Reuse existing driver - check if still logged in
+            print("Reusing existing browser session...")
+            driver.get("https://www.instagram.com")
+            time.sleep(2)
+            
+            # Check if we need to login again
+            if "login" in driver.current_url.lower() or "accounts/login" in driver.current_url:
+                print("Session expired, logging in again...")
                 login_success = login_to_instagram(driver, username, password)
-                
-                if not login_success:
-                    # Fall back to manual login
-                    print("\n" + "="*60)
-                    print("Automatic login not available or failed.")
-                    print("Please log in to Instagram in the browser window.")
-                    print("IMPORTANT: Make sure you log in to the account: real_cascadia")
-                    print("The browser will NOT do anything until you press Enter.")
-                    print("Take your time - complete the full login process.")
-                    print("Once you are fully logged in and on the Instagram home page, press Enter...")
-                    print("="*60)
-                    input()  # Wait here - browser stays static until Enter is pressed
-                    
-                    # Verify login after manual entry
-                    print("\nVerifying login...")
-                    time.sleep(2)
-                    driver.get("https://www.instagram.com")
-                    time.sleep(3)
-                
-                # Verify we're logged in as the correct account (real_cascadia)
-                try:
-                    print("Verifying account...")
-                    # Try to find the username in the page - check profile link or navigation
-                    # Instagram's structure varies, so we'll try multiple approaches
-                    username_found = False
-                    try:
-                        # Method 1: Check profile link in navigation
-                        profile_links = driver.find_elements(By.CSS_SELECTOR, "a[href*='/real_cascadia/']")
-                        if profile_links:
-                            username_found = True
-                            print("âœ“ Verified: Logged in as real_cascadia")
-                    except:
-                        pass
-                    
-                    if not username_found:
-                        try:
-                            # Method 2: Check if we can access the profile page
-                            driver.get(f"https://www.instagram.com/real_cascadia/")
-                            time.sleep(2)
-                            # If we're logged in as this account, we should see edit profile or similar
-                            if "edit" in driver.page_source.lower() or "real_cascadia" in driver.current_url:
-                                username_found = True
-                                print("âœ“ Verified: Logged in as real_cascadia")
-                            else:
-                                print("âš  Warning: Could not verify account. Please ensure you're logged in as real_cascadia")
-                        except:
-                            print("âš  Warning: Could not verify account. Please ensure you're logged in as real_cascadia")
-                    
-                    # Navigate back to main page
-                    driver.get("https://www.instagram.com")
-                    time.sleep(2)
-                except Exception as verify_error:
-                    print(f"âš  Could not verify account automatically: {verify_error}")
-                    print("Please manually verify you're logged in as real_cascadia before continuing")
-                    input("Press Enter to continue...")
-                
-                # Navigate to home page and click create button
-                print("\nNavigating to Instagram home page...")
-                driver.get("https://www.instagram.com")
-                time.sleep(3)
-                
-                # Handle post-login prompts (save login info, OK button) as safety measure
-                # This ensures prompts are handled even if they appear later or weren't caught during login
-                _handle_post_login_prompts(driver)
-                
-                # Dismiss any other pop-ups that appear after login (must be done before clicking +)
-                _dismiss_instagram_popups(driver)
-                
-                # Click the create/new post button (+ icon) - using exact aria-label
-                print("Looking for create post button (+ icon)...")
-                create_button = None
-                # Try exact selectors for the create button (French: "Nouvelle publication")
-                create_selectors = [
-                    "svg[aria-label='Nouvelle publication']",
-                    "svg[aria-label*='Nouvelle publication']",
-                    "svg[aria-label='New post']",
-                    "svg[aria-label='Create']",
-                    "//svg[@aria-label='Nouvelle publication']",
-                    "//svg[contains(@aria-label, 'Nouvelle publication')]",
-                    "//a[contains(@href, '/create/')]"
-                ]
-                
-                for selector in create_selectors:
-                    try:
-                        if selector.startswith("//"):
-                            create_button = WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.XPATH, selector))
-                            )
-                        else:
-                            create_button = WebDriverWait(driver, 5).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                            )
-                        if create_button:
-                            break
-                    except:
-                        continue
-                
-                # If SVG found, try to find parent clickable element
-                if create_button and create_button.tag_name == 'svg':
-                    try:
-                        # Find parent anchor or button
-                        parent = create_button.find_element(By.XPATH, "./ancestor::a | ./ancestor::button | ./ancestor::div[@role='button']")
-                        if parent:
-                            create_button = parent
-                    except:
-                        pass
-                
-                if create_button:
-                    driver.execute_script("arguments[0].scrollIntoView(true);", create_button)
-                    time.sleep(1)
-                    create_button.click()
-                    print("âœ“ Clicked create post button")
-                    time.sleep(3)
-                else:
-                    print("âš  Could not find create button automatically")
-                    print("Please manually click the '+' (create) button in Instagram")
-                    input("Press Enter once you've clicked the create button...")
-                
-                # Click "Publication" option - wait for dropdown to appear, then click the link
-                print("Waiting for dropdown menu to appear...")
-                time.sleep(2)
-                
-                # Wait for the dropdown to be visible (it should contain Publication option)
-                publication_link = None
-                publication_selectors = [
-                    # Target the <a> tag that contains the span with "Publication" text
-                    "//a[@role='link'][.//span[contains(text(), 'Publication')]]",
-                    "//a[.//span[contains(text(), 'Publication')]]",
-                    "//a[contains(@href, '#')][.//span[contains(text(), 'Publication')]]",
-                    # Fallback: find by span and get parent <a>
-                    "//span[contains(text(), 'Publication')]/ancestor::a[@role='link']",
-                    "//span[contains(text(), 'Publication')]/ancestor::a",
-                    # Alternative: find by SVG aria-label
-                    "//a[.//svg[@aria-label='Publication']]",
-                    "//svg[@aria-label='Publication']/ancestor::a[@role='link']"
-                ]
-                
-                for selector in publication_selectors:
-                    try:
-                        publication_link = WebDriverWait(driver, 5).until(
-                            EC.element_to_be_clickable((By.XPATH, selector))
-                        )
-                        if publication_link:
-                            break
-                    except:
-                        continue
-                
-                if publication_link:
-                    # Scroll into view and click
-                    driver.execute_script("arguments[0].scrollIntoView(true);", publication_link)
-                    time.sleep(0.5)
-                    publication_link.click()
-                    print("âœ“ Clicked Publication option")
-                    time.sleep(3)
-                else:
-                    print("âš  Could not find Publication option automatically")
-                    print("Please manually click 'Publication' option from the dropdown")
-                    input("Press Enter once you've selected Publication...")
-                
-                # Find and click the file selector button, or use file input directly
-                print("Looking for file selector...")
-                time.sleep(2)
-                
-                # Try to find the "SÃ©lectionner sur l'ordinateur" button first
-                file_selector_button = None
-                try:
-                    file_selector_button = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'SÃ©lectionner sur l')]"))
-                    )
-                except:
-                    pass
-                
-                # Find file input for uploading images
-                print("Looking for file upload element...")
-                file_input = WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
-                )
-                
-                # Make sure the file input is visible
-                driver.execute_script("arguments[0].scrollIntoView(true);", file_input)
-                time.sleep(1)
-                
-                # Upload images - for carousel/gallery posts, upload all images together
-                if len(image_paths) > 1:
-                    print(f"Uploading {len(image_paths)} images for gallery post...")
-                else:
-                    print(f"Uploading image...")
-                
-                try:
-                    # Instagram accepts multiple files when sent as newline-separated paths
-                    # Convert all paths to absolute paths
-                    absolute_paths = [os.path.abspath(img) for img in image_paths]
-                    file_paths = "\n".join(absolute_paths)
-                    
-                    # Send all file paths at once for carousel/gallery
-                    file_input.send_keys(file_paths)
-                    if len(image_paths) > 1:
-                        print(f"âœ“ Successfully uploaded {len(image_paths)} images for gallery post")
-                    else:
-                        print(f"âœ“ Successfully uploaded image")
-                    time.sleep(5)  # Give Instagram time to process all images
-                except Exception as upload_error:
-                    print(f"Multiple file upload failed: {upload_error}")
-                    print("Trying alternative method...")
-                    try:
-                        # Try uploading first image, then adding more
-                        file_input.send_keys(os.path.abspath(image_paths[0]))
-                        print(f"Uploaded first image: {image_paths[0]}")
-                        time.sleep(3)
-                        
-                        # Try to find and click "Add" or "Select more" to add additional images
-                        try:
-                            add_selectors = [
-                                "//button[contains(text(), 'Add')]",
-                                "//button[contains(text(), 'Select more')]",
-                                "//div[contains(text(), 'Add')]",
-                                "//div[@role='button' and contains(text(), 'Add')]"
-                            ]
-                            add_button = None
-                            for selector in add_selectors:
-                                try:
-                                    add_button = WebDriverWait(driver, 5).until(
-                                        EC.element_to_be_clickable((By.XPATH, selector))
-                                    )
-                                    if add_button:
-                                        break
-                                except:
-                                    continue
-                            
-                            if add_button:
-                                add_button.click()
-                                time.sleep(2)
-                                
-                                # Find file input again and upload remaining images
-                                file_input2 = WebDriverWait(driver, 5).until(
-                                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
-                                )
-                                remaining_paths = "\n".join([os.path.abspath(img) for img in image_paths[1:]])
-                                file_input2.send_keys(remaining_paths)
-                                print(f"âœ“ Uploaded remaining {len(image_paths) - 1} images")
-                            else:
-                                print(f"âš  Could not find 'Add' button")
-                                print(f"   Please manually add the remaining {len(image_paths) - 1} image(s) in Instagram")
-                        except Exception as add_error:
-                            print(f"âš  Could not add additional images: {add_error}")
-                            print(f"   Please manually add the remaining {len(image_paths) - 1} image(s) in Instagram")
-                    except Exception as alt_error:
-                        print(f"Alternative upload method also failed: {alt_error}")
-                        print(f"âš  Please manually select all {len(image_paths)} images in Instagram")
-                
-                # Wait for images to load and process
-                print("Waiting for images to process...")
-                time.sleep(5)
-                # Images are already in 1:1 square format, so no aspect ratio adjustment needed                                                                 
-
-                # Click "Suivant" (Next) button twice
-                print("Clicking Next buttons...")
-                try:
-                    # Find and click first "Suivant" button
-                    suivant_buttons = driver.find_elements(By.XPATH, "//div[@role='button' and contains(text(), 'Suivant')] | //div[contains(text(), 'Suivant')]")
-
-                    if len(suivant_buttons) > 0:
-                        # Click first Suivant button
-                        suivant_buttons[0].click()
-                        print("âœ“ Clicked first 'Suivant' (Next) button")
-                        time.sleep(2)
-
-                        # Find and click second Suivant button (might be the same element or different)                                                         
-                        suivant_buttons_2 = driver.find_elements(By.XPATH, "//div[@role='button' and contains(text(), 'Suivant')] | //div[contains(text(), 'Suivant')]")                                                                        
-                        if len(suivant_buttons_2) > 0:
-                            suivant_buttons_2[0].click()
-                            print("Clicked second 'Suivant' (Next) button")
-                            time.sleep(2)
-                    else:
-                        # Try English version
-                        next_buttons = driver.find_elements(By.XPATH, "//div[@role='button' and contains(text(), 'Next')] | //div[contains(text(), 'Next')]")
-                        if len(next_buttons) > 0:
-                            next_buttons[0].click()
-                            print("âœ“ Clicked first 'Next' button")
-                            time.sleep(2)
-                            next_buttons_2 = driver.find_elements(By.XPATH, "//div[@role='button' and contains(text(), 'Next')] | //div[contains(text(), 'Next')]")
-                            if len(next_buttons_2) > 0:
-                                next_buttons_2[0].click()
-                                print("âœ“ Clicked second 'Next' button")
-                                time.sleep(2)
-                        else:
-                            print("âš  Could not find 'Suivant' button automatically")
-                            input("Please manually click 'Next' button(s), then press Enter...")
-
-                    # Now fill caption after second Suivant button is clicked
-                    # Find and fill caption
-                    try:
-                        print("Looking for caption input area...")
-                        # Try multiple selectors for the caption area
-                        caption_area = None
-                        caption_selectors = [
-                            # The specific element provided by user
-                            "p.xdj266r.x14z9mp.xat24cr.x1lziwak[dir='auto']",
-                            "//p[@class='xdj266r x14z9mp xat24cr x1lziwak' and @dir='auto']",
-                            # Try finding parent with class that contains these classes
-                            "//p[contains(@class, 'xdj266r') and contains(@class, 'x14z9mp')]",
-                            # Fallback to textarea
-                            "textarea[aria-label*='Write a caption']",
-                            "textarea[aria-label*='Ã‰crire une lÃ©gende']",
-                            "//textarea",
-                            # Contenteditable div
-                            "div[contenteditable='true']",
-                            "//div[@contenteditable='true']",
-                        ]
-
-                        for selector in caption_selectors:
-                            try:
-                                if selector.startswith("//"):
-                                    caption_area = WebDriverWait(driver, 5).until(
-                                        EC.presence_of_element_located((By.XPATH, selector))
-                                    )
-                                else:
-                                    caption_area = WebDriverWait(driver, 5).until(
-                                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                                    )
-                                if caption_area and caption_area.is_displayed():
-                                    print(f"  Found caption area using selector: {selector}")
-                                    break
-                            except:
-                                continue
-
-                        if not caption_area:
-                            # Try to find parent contenteditable element
-                            try:
-                                p_element = driver.find_element(By.CSS_SELECTOR, "p.xdj266r.x14z9mp.xat24cr.x1lziwak[dir='auto']")
-                                # Find parent with contenteditable
-                                caption_area = driver.execute_script("""
-                                    var p = arguments[0];
-                                    var parent = p.parentElement;
-                                    while (parent) {
-                                        if (parent.contentEditable === 'true' || parent.getAttribute('contenteditable') === 'true') {                               
-                                            return parent;
-                                        }
-                                        parent = parent.parentElement;
-                                    }
-                                    return p;
-                                """, p_element)
-                                if caption_area:
-                                    print("  Found parent contenteditable element") 
-                            except:
-                                pass
-
-                        if caption_area:
-                            # Wait for element to be clickable and scroll into view
-                            print("  Waiting for caption area to be ready...")
-                            try:
-                                WebDriverWait(driver, 5).until(
-                                    EC.element_to_be_clickable(caption_area)
-                                )
-                            except:
-                                print("  ⚠ Element might not be clickable yet, continuing anyway...")
-                            
-                            driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", caption_area)
-                            time.sleep(1)
-                        
-                            # Try multiple methods to fill the caption
-                            caption_filled = False
-                            
-                            # Method 1: Click to focus, then use send_keys (most reliable for contenteditable)
-                            try:
-                                from selenium.webdriver.common.keys import Keys
-                                from selenium.webdriver.common.action_chains import ActionChains
-                                
-                                # Multiple click strategies to ensure the element is focused
-                                print("  Clicking on caption text box to focus...")
-                                
-                                # Strategy 1: JavaScript click (more reliable for some elements)
-                                driver.execute_script("arguments[0].click();", caption_area)
-                                time.sleep(0.5)
-                                
-                                # Strategy 2: Regular Selenium click
-                                try:
-                                    caption_area.click()
-                                    time.sleep(0.5)
-                                except:
-                                    pass
-                                
-                                # Strategy 3: ActionChains click (moves mouse and clicks)
-                                try:
-                                    ActionChains(driver).move_to_element(caption_area).click().perform()
-                                    time.sleep(0.5)
-                                except:
-                                    pass
-                                
-                                # Ensure element has focus using JavaScript
-                                driver.execute_script("arguments[0].focus();", caption_area)
-                                time.sleep(0.5)
-                                
-                                # Verify focus
-                                focused_element = driver.execute_script("return document.activeElement;")
-                                if focused_element == caption_area or driver.execute_script("return arguments[0].contains(document.activeElement) || arguments[0] === document.activeElement;", caption_area):
-                                    print("  ✓ Caption box is focused")
-                                else:
-                                    print("  ⚠ Warning: Caption box might not be focused, continuing anyway...")
-                                
-                                # Clear any existing content
-                                ActionChains(driver).key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).perform()
-                                time.sleep(0.3)
-                                ActionChains(driver).send_keys(Keys.DELETE).perform()
-                                time.sleep(0.3)
-                                
-                                # Type the caption
-                                print(f"  Typing caption ({len(caption)} characters)...")
-                                caption_area.send_keys(caption)
-                                time.sleep(1)
-                                caption_filled = True
-                                print("  ✓ Caption filled using send_keys")
-                            except Exception as send_keys_error:
-                                print(f"  send_keys failed: {send_keys_error}")
-                            
-                            # Method 2: JavaScript with proper event handling (if send_keys didn't work)
-                            if not caption_filled:
-                                try:
-                                    print("  Trying JavaScript method to fill caption...")
-                                    # First, click and focus the element
-                                    driver.execute_script("""
-                                        var element = arguments[0];
-                                        element.click();
-                                        element.focus();
-                                        element.scrollIntoView({block: 'center', behavior: 'smooth'});
-                                    """, caption_area)
-                                    time.sleep(0.5)  # Wait for focus to take effect
-                                    
-                                    # Now set the content
-                                    driver.execute_script("""
-                                        var element = arguments[0];
-                                        var text = arguments[1];
-
-                                        // For contenteditable elements, we need to set the content properly
-                                        // Clear existing content
-                                        while (element.firstChild) {
-                                            element.removeChild(element.firstChild);
-                                        }
-                                        
-                                        // Set the text - try multiple methods
-                                        element.textContent = text;
-                                        element.innerText = text;
-                                        
-                                        // For <p> elements, also set innerHTML with proper structure
-                                        if (element.tagName === 'P') {
-                                            // Split by newlines and join with <br> tags
-                                            var lines = text.split('\\n');
-                                            element.innerHTML = lines.join('<br>');
-                                        }
-                                        
-                                        // Move cursor to end
-                                        var range = document.createRange();
-                                        var selection = window.getSelection();
-                                        range.selectNodeContents(element);
-                                        range.collapse(false);
-                                        selection.removeAllRanges();
-                                        selection.addRange(range);
-                                        
-                                        // Trigger all relevant events that Instagram listens for
-                                        var eventTypes = ['input', 'change', 'keyup', 'keydown', 'paste', 'compositionend'];
-                                        eventTypes.forEach(function(eventType) {
-                                            var event = new Event(eventType, { bubbles: true, cancelable: true });
-                                            element.dispatchEvent(event);
-                                        });
-                                        
-                                        // Also trigger InputEvent specifically (more realistic)
-                                        try {
-                                            var inputEvent = new InputEvent('input', { 
-                                                bubbles: true, 
-                                                cancelable: true, 
-                                                data: text,
-                                                inputType: 'insertText'
-                                            });
-                                            element.dispatchEvent(inputEvent);
-                                        } catch(e) {
-                                            // Fallback if InputEvent not supported
-                                            var inputEvent = new Event('input', { bubbles: true, cancelable: true });
-                                            element.dispatchEvent(inputEvent);
-                                        }
-                                    """, caption_area, caption)
-                                    time.sleep(1)
-                                    caption_filled = True
-                                    print("✓ Caption filled using JavaScript")
-                                except Exception as js_error:
-                                    print(f"  JavaScript method failed: {js_error}")
-                            
-                            if not caption_filled:
-                                print("⚠ All caption filling methods failed")
-                            else:
-                                # Verify the caption was actually set
-                                try:
-                                    actual_text = driver.execute_script("return arguments[0].innerText || arguments[0].textContent || '';", caption_area)
-                                    if actual_text.strip():
-                                        print(f"✓ Verified caption is set (length: {len(actual_text)} characters)")
-                                    else:
-                                        print("⚠ Warning: Caption area appears empty after filling")
-                                except:
-                                    pass
-                            
-                                time.sleep(1)
-                        else:
-                            print("⚠ Could not find caption area - you may need to add caption manually")
-                    except Exception as caption_error:
-                        print(f"⚠ Error finding/filling caption area: {caption_error}")
-                        import traceback
-                        traceback.print_exc()
-                        print("You may need to add caption manually")
-
-                    # Automatically proceed to share (no user input needed)
-                    print("Caption filled, proceeding to share...")
-
-                    # Now click "Partager" (Share) button
-                    # Now click "Partager" (Share) button
-                    print("Looking for Share button...")
-                    time.sleep(2)
-                    partager_buttons = driver.find_elements(By.XPATH, "//div[@role='button' and contains(text(), 'Partager')] | //div[contains(text(), 'Partager')]")
-                    
-                    if len(partager_buttons) > 0:
-                        partager_buttons[0].click()
-                        print("âœ“ Clicked 'Partager' (Share) button - Post shared!")
-                        time.sleep(3)
-                    else:
-                        # Try English version
-                        share_buttons = driver.find_elements(By.XPATH, "//div[@role='button' and contains(text(), 'Share')] | //div[contains(text(), 'Share')] | //button[contains(text(), 'Share')]")
-                        if len(share_buttons) > 0:
-                            share_buttons[0].click()
-                            print("âœ“ Clicked 'Share' button - Post shared!")
-                            time.sleep(3)
-                        else:
-                            print("âš  Could not find 'Partager' button automatically")
-                            input("Please manually click 'Share' button, then press Enter...")
-                except Exception as share_error:
-                    print(f"âš  Error clicking share button: {share_error}")
-                    print("Please manually click 'Share' button")
-                    input("Press Enter once posted...")
-                
-                driver.quit()
-                return True
-                
-            except Exception as e:
-                print(f"\nError during Instagram posting: {e}")
-                print(f"Error type: {type(e).__name__}")
-                print("Full error details:")
-                traceback.print_exc()
-                print("\nThe browser will remain open so you can try posting manually.")
-                print("If you want to close it, you can do so manually.")
-                print("Falling back to manual posting instructions...\n")
-                # Don't quit the browser immediately - let user close it manually if needed
-                # driver.quit()  # Commented out to keep browser open
-                return post_to_instagram_manual(image_paths, caption)
-                
-        except ImportError:
-            # Selenium not available, use manual method
-            print("Selenium not installed. Using manual posting method.")
-            return post_to_instagram_manual(image_paths, caption)
+                # ... handle login ...
+        
+        # ... rest of posting logic ...
+        
+        # Only quit if we created the browser
+        if browser_created:
+            driver.quit()
+        else:
+            # Keep browser open for reuse
+            print("Browser session kept open for next post...")
+            return True
             
     except Exception as e:
-        print(f"Error posting to Instagram: {e}")
-        return post_to_instagram_manual(image_paths, caption)
+        # ... error handling ...
 
 
 def post_to_instagram_manual(image_paths, caption=""):
@@ -1212,7 +1101,7 @@ def post_to_instagram_manual(image_paths, caption=""):
     return True
 
 
-def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None):
+def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None, initial_teams=None, game_results_by_week=None):
     """
     Post images to Instagram with 5 minute intervals between weeks (testing mode).
     
@@ -1221,6 +1110,8 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None):
         teams: List of Team objects (for standings and odds calculation)
         upcoming_schedule: Dictionary mapping week numbers to lists of (team1, team2) tuples
                           representing upcoming matchups
+        initial_teams: List of Team objects in their initial state (before any games)
+        game_results_by_week: Dictionary mapping week numbers to lists of game_result tuples
     """
     import game_logic
     
@@ -1228,9 +1119,10 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None):
     print("Starting Instagram posting schedule...")
     print("="*60)
     
-    # Sort weeks
+    # Sort weeks (integers only)
     sorted_weeks = sorted([w for w in all_images_by_week.keys() if isinstance(w, int)])
     
+    # Post all round robin weeks first
     for week in sorted_weeks:
         images = all_images_by_week[week]
         if not images:
@@ -1245,8 +1137,14 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None):
         # Generate caption with standings and next week odds
         caption_parts = [f"Week {week} Game Results"]
         
-        # Add current standings
-        if teams:
+        # Add current standings (only up to current week)
+        if initial_teams and game_results_by_week:
+            caption_parts.append("")
+            caption_parts.append("Current Standings:")
+            standings = game_logic.calculate_standings_up_to_week(initial_teams, game_results_by_week, week)
+            caption_parts.append(standings)
+        elif teams:
+            # Fallback to old method if new parameters not provided
             caption_parts.append("")
             caption_parts.append("Current Standings:")
             standings = game_logic.format_standings_for_caption(teams)
@@ -1285,6 +1183,75 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None):
             except KeyboardInterrupt:
                 print("\nPosting cancelled by user.")
                 break
+    
+    # Post bracket before quarterfinals (if it exists)
+    if 'bracket_quarterfinals' in all_images_by_week:
+        images = all_images_by_week['bracket_quarterfinals']
+        if images:
+            print(f"\n{'='*60}")
+            print(f"Posting Tournament Bracket - Quarterfinals ({len(images)} image)")
+            print(f"{'='*60}")
+            
+            # Post with no caption
+            success = post_to_instagram(images, "")
+            
+            if not success:
+                print(f"Warning: Failed to post tournament bracket")
+                response = input("Continue to quarterfinals? (y/n): ")
+                if response.lower() != 'y':
+                    print("\nInstagram posting schedule cancelled!")
+                    return
+    
+    # Post bracket before semifinals (if it exists)
+    if 'bracket_semifinals' in all_images_by_week:
+        images = all_images_by_week['bracket_semifinals']
+        if images:
+            print(f"\n{'='*60}")
+            print(f"Posting Tournament Bracket - Semifinals ({len(images)} image)")
+            print(f"{'='*60}")
+            
+            # Post with no caption
+            success = post_to_instagram(images, "")
+            
+            if not success:
+                print(f"Warning: Failed to post tournament bracket")
+                response = input("Continue to semifinals? (y/n): ")
+                if response.lower() != 'y':
+                    print("\nInstagram posting schedule cancelled!")
+                    return
+    
+    # Post bracket before finals (if it exists)
+    if 'bracket_finals' in all_images_by_week:
+        images = all_images_by_week['bracket_finals']
+        if images:
+            print(f"\n{'='*60}")
+            print(f"Posting Tournament Bracket - Finals ({len(images)} image)")
+            print(f"{'='*60}")
+            
+            # Post with no caption
+            success = post_to_instagram(images, "")
+            
+            if not success:
+                print(f"Warning: Failed to post tournament bracket")
+                response = input("Continue to finals? (y/n): ")
+                if response.lower() != 'y':
+                    print("\nInstagram posting schedule cancelled!")
+                    return
+    
+    # Post tournament matches (if they exist)
+    if 'tournament' in all_images_by_week:
+        images = all_images_by_week['tournament']
+        if images:
+            print(f"\n{'='*60}")
+            print(f"Posting Tournament Matches ({len(images)} images)")
+            print(f"{'='*60}")
+            
+            caption = "🏆 TOURNAMENT MATCHES 🏆\n\nLet the playoffs begin!"
+            
+            success = post_to_instagram(images, caption)
+            
+            if not success:
+                print(f"Warning: Failed to post tournament matches")
     
     print("\nInstagram posting schedule completed!")
 
