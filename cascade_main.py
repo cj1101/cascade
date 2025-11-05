@@ -76,37 +76,19 @@ def main():
     repetition_text = "Round Robin" if ROUND_ROBIN_REPETITIONS == 1 else f"Round Robin ({ROUND_ROBIN_REPETITIONS} repetitions)"
     print(f"\n{repetition_text}:")
     
-    driver = None
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-        import time
-        
-        # Create browser once at the start
-        chrome_options = Options()
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        chrome_options.add_experimental_option("detach", True)
-        
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        # Login once at the start
-        username = config.INSTAGRAM_USERNAME
-        password = config.INSTAGRAM_PASSWORD
-        login_success = instagram_poster.login_to_instagram(driver, username, password)
-        if not login_success:
-            # Manual login prompt...
-            print(f"Please log in to Instagram manually. Enter 'y' once logged in to continue.")
-            input("Press Enter once logged in...")
-        
-        print("Browser session initialized. It will remain open for all posts.")
-        
-    except Exception as e:
-        print(f"Could not initialize browser: {e}")
-        driver = None
+    # Verify Graph API credentials are configured
+    access_token = getattr(config, 'INSTAGRAM_ACCESS_TOKEN', None)
+    account_id = getattr(config, 'INSTAGRAM_ACCOUNT_ID', None)
+    if not access_token or not account_id:
+        print("\n⚠️  Warning: Instagram Graph API credentials not configured!")
+        print("   Please set INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID in config.py")
+        print("   Instagram posts will fail until credentials are configured.")
+        response = input("\nContinue anyway? (y/n): ")
+        if response.lower() != 'y':
+            print("Exiting...")
+            return
+    else:
+        print("✓ Instagram Graph API credentials configured")
 
     for round_robin_num in range(ROUND_ROBIN_REPETITIONS):
         # Generate the full schedule for this round robin
@@ -194,7 +176,7 @@ def main():
             caption = "\n".join(caption_parts)
             
             # Post all images for this week as a single carousel/gallery post
-            success = instagram_poster.post_to_instagram(week_image_files, caption, driver=driver)
+            success = instagram_poster.post_to_instagram(week_image_files, caption)
             if not success:
                 print(f"Warning: Failed to post Week {week} images")
                 response = input("Continue to next week? (y/n): ")
@@ -223,7 +205,7 @@ def main():
     print(f"\n{'='*60}")
     print("Posting Tournament Bracket - Quarterfinals")
     print(f"{'='*60}")
-    instagram_poster.post_to_instagram([bracket_qf_filename], "", driver=driver)
+    instagram_poster.post_to_instagram([bracket_qf_filename], "")
     
     # QUARTERFINALS - Generate and post
     print("\nQuarterfinals:")
@@ -267,7 +249,7 @@ def main():
     print("Posting Quarterfinals to Instagram...")
     print(f"{'='*60}")
     caption = "Tournament Quarterfinals"
-    success = instagram_poster.post_to_instagram(quarterfinal_images, caption, driver=driver)
+    success = instagram_poster.post_to_instagram(quarterfinal_images, caption)
     if not success:
         print("Warning: Failed to post quarterfinals images")
     
@@ -279,7 +261,7 @@ def main():
     print(f"\n{'='*60}")
     print("Posting Tournament Bracket - Semifinals")
     print(f"{'='*60}")
-    instagram_poster.post_to_instagram([bracket_sf_filename], "", driver=driver)
+    instagram_poster.post_to_instagram([bracket_sf_filename], "")
     
     # SEMIFINALS - Generate and post
     print("\nSemifinals:")
@@ -330,7 +312,7 @@ def main():
     print("Posting Semifinals to Instagram...")
     print(f"{'='*60}")
     caption = "Tournament Semifinals"
-    success = instagram_poster.post_to_instagram(semifinal_images, caption, driver=driver)
+    success = instagram_poster.post_to_instagram(semifinal_images, caption)
     if not success:
         print("Warning: Failed to post semifinals images")
     
@@ -342,7 +324,7 @@ def main():
     print(f"\n{'='*60}")
     print("Posting Tournament Bracket - Finals")
     print(f"{'='*60}")
-    instagram_poster.post_to_instagram([bracket_finals_filename], "", driver=driver)
+    instagram_poster.post_to_instagram([bracket_finals_filename], "")
     
     # FINALS - Best 2 out of 3, generate and post after each game
     print("\nFinal (Best 2 out of 3):")
@@ -393,7 +375,7 @@ def main():
         print(f"Posting Final Game {game_num} to Instagram...")
         print(f"{'='*60}")
         caption = f"Tournament Final - Game {game_num}\nSeries: {team1.name} {team1_wins} - {team2_wins} {team2.name}"
-        success = instagram_poster.post_to_instagram(final_game_images, caption, driver=driver)
+        success = instagram_poster.post_to_instagram(final_game_images, caption)
         if not success:
             print(f"Warning: Failed to post final game {game_num} images")
         
@@ -438,16 +420,13 @@ def main():
             print("Posting Champion Trophy to Instagram...")
             print(f"{'='*60}")
             caption = f"🏆 TOURNAMENT CHAMPION: {champion.name} 🏆\nFinal Series: {team1.name} {team1_wins} - {team2_wins} {team2.name}"
-            instagram_poster.post_to_instagram([trophy_filename], caption, driver=driver)
+            instagram_poster.post_to_instagram([trophy_filename], caption)
         else:
             print("Warning: Champion trophy image generation failed")
     
     print("\nFinal Team Stats:")
     for team in teams:
         print(f"{team}")
-
-    if driver:
-        driver.quit()
 
 
 if __name__ == "__main__":

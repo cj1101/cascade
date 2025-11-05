@@ -1,1117 +1,472 @@
-﻿"""Instagram posting module for Cascade game simulation"""
+﻿"""Instagram posting module using Graph API"""
+import requests
 import os
 import time
-import traceback
 import config
+from typing import List, Optional
 
 
-def _dismiss_instagram_popups(driver):
+def post_to_instagram(image_paths: List[str], caption: str = "", 
+                      access_token: Optional[str] = None, 
+                      instagram_account_id: Optional[str] = None):
     """
-    Dismiss any Instagram pop-ups/modals that appear after login.
-    These can include welcome messages, notifications, etc.
-    """
-    try:
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        
-        print("Checking for Instagram pop-ups to dismiss...")
-        time.sleep(2)  # Wait for pop-ups to appear
-        
-        # Try multiple times as pop-ups may appear sequentially
-        max_attempts = 5
-        for attempt in range(max_attempts):
-            popup_dismissed = False
-            
-            # Common pop-up dismissal selectors
-            dismiss_selectors = [
-                # OK buttons
-                "//button[contains(text(), 'OK')]",
-                "//button[contains(text(), 'Ok')]",
-                "//div[@role='button' and contains(text(), 'OK')]",
-                "//div[@role='button' and contains(text(), 'Ok')]",
-                # French
-                "//button[contains(text(), 'D\'accord')]",
-                "//div[@role='button' and contains(text(), 'D\'accord')]",
-                # Got it / Continue
-                "//button[contains(text(), 'Got it')]",
-                "//button[contains(text(), 'Continue')]",
-                "//div[@role='button' and contains(text(), 'Got it')]",
-                "//div[@role='button' and contains(text(), 'Continue')]",
-                # French
-                "//button[contains(text(), 'Compris')]",
-                "//button[contains(text(), 'Continuer')]",
-                "//div[@role='button' and contains(text(), 'Compris')]",
-                "//div[@role='button' and contains(text(), 'Continuer')]",
-                # Not now / Close
-                "//button[contains(text(), 'Not Now')]",
-                "//div[@role='button' and contains(text(), 'Not Now')]",
-                "//button[@aria-label='Close']",
-                "//button[@aria-label='Fermer']",
-                # Generic button in modal/dialog
-                "//div[@role='dialog']//button[contains(@class, '_acan')]",
-                "//div[@role='dialog']//div[@role='button']",
-            ]
-            
-            for selector in dismiss_selectors:
-                try:
-                    buttons = driver.find_elements(By.XPATH, selector)
-                    for button in buttons:
-                        if button.is_displayed():
-                            try:
-                                driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                time.sleep(0.5)
-                                button.click()
-                                print(f"  âœ“ Dismissed pop-up (attempt {attempt + 1})")
-                                popup_dismissed = True
-                                time.sleep(1)
-                                break
-                            except:
-                                continue
-                    if popup_dismissed:
-                        break
-                except:
-                    continue
-            
-            # If no pop-up found, try pressing Escape key
-            if not popup_dismissed:
-                try:
-                    from selenium.webdriver.common.keys import Keys
-                    driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-                    time.sleep(0.5)
-                except:
-                    pass
-            
-            # If no pop-up was dismissed in this attempt, we're done
-            if not popup_dismissed:
-                if attempt == 0:
-                    print("  No pop-ups found to dismiss")
-                break
-            
-            # Wait a bit before next attempt in case more pop-ups appear
-            time.sleep(1)
-        
-        print("Finished checking for pop-ups")
-        time.sleep(1)  # Final wait after dismissing pop-ups
-        
-    except Exception as e:
-        # Silently fail - pop-ups might not be present
-        pass
-
-
-def _handle_post_login_prompts(driver):
-    """
-    Handle Instagram-specific post-login prompts:
-    1. Onetap page "Plus tard" (Later) button at instagram.com/accounts/onetap/
-    2. "Enregister vos infos" / "Save your login info" prompt
-    3. Big OK button popup that appears after saving login info
-    
-    These prompts appear after successful login and must be handled before
-    proceeding with other actions like clicking the + button.
-    """
-    try:
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        
-        print("Handling post-login prompts...")
-        time.sleep(2)  # Wait for prompts to appear
-        
-        # Step 0: Check if we're on the onetap page and click "Plus tard" (Later)
-        current_url = driver.current_url.lower()
-        if "onetap" in current_url:
-            print("Detected onetap page, clicking 'Plus tard' (Later)...")
-            plus_tard_clicked = False
-            
-            # Try exact selector first: div with role="button" and text "Plus tard"
-            plus_tard_selectors = [
-                "//div[@role='button' and contains(text(), 'Plus tard')]",
-                "//div[@role='button' and text()='Plus tard']",
-                "//button[contains(text(), 'Plus tard')]",
-                # English version
-                "//div[@role='button' and contains(text(), 'Later')]",
-                "//div[@role='button' and text()='Later']",
-                "//button[contains(text(), 'Later')]",
-            ]
-            
-            for selector in plus_tard_selectors:
-                try:
-                    buttons = driver.find_elements(By.XPATH, selector)
-                    for button in buttons:
-                        if button.is_displayed():
-                            try:
-                                driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                time.sleep(0.5)
-                                button.click()
-                                print("  ✓ Clicked 'Plus tard' (Later) button")
-                                plus_tard_clicked = True
-                                time.sleep(2)  # Wait for navigation
-                                break
-                            except Exception as e:
-                                continue
-                    if plus_tard_clicked:
-                        break
-                except:
-                    continue
-            
-            if not plus_tard_clicked:
-                print("  ⚠ Could not find 'Plus tard' button on onetap page")
-            
-            # Wait a bit more after clicking to ensure navigation completes
-            time.sleep(2)
-        
-        # Step 1: Handle "Enregister vos infos" / "Save your login info" prompt
-        save_login_selectors = [
-            # French: "Enregister vos infos"
-            "//button[contains(text(), 'Enregister vos infos')]",
-            "//button[contains(text(), 'Enregistrer vos infos')]",  # Alternative spelling
-            "//div[@role='button' and contains(text(), 'Enregister vos infos')]",
-            "//div[@role='button' and contains(text(), 'Enregistrer vos infos')]",
-            # English: "Save your login info" or variations
-            "//button[contains(text(), 'Save your login info')]",
-            "//button[contains(text(), 'Save Login Info')]",
-            "//button[contains(text(), 'Save Info')]",
-            "//div[@role='button' and contains(text(), 'Save your login info')]",
-            "//div[@role='button' and contains(text(), 'Save Login Info')]",
-            # More generic selectors
-            "//button[contains(text(), 'Enregistrer')]",
-            "//button[contains(text(), 'Save')]",
-            # By aria-label
-            "//button[@aria-label='Enregister vos infos']",
-            "//button[@aria-label='Save your login info']",
-        ]
-        
-        save_button_clicked = False
-        for selector in save_login_selectors:
-            try:
-                buttons = driver.find_elements(By.XPATH, selector)
-                for button in buttons:
-                    if button.is_displayed():
-                        try:
-                            driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                            time.sleep(0.5)
-                            button.click()
-                            print("  âœ“ Clicked 'Save your login info' button")
-                            save_button_clicked = True
-                            time.sleep(2)  # Wait for OK button to appear
-                            break
-                        except Exception as e:
-                            continue
-                if save_button_clicked:
-                    break
-            except:
-                continue
-        
-        if not save_button_clicked:
-            print("  No 'Save login info' prompt found (may not appear)")
-        
-        # Step 2: Handle the big OK button popup
-        # Wait a bit longer for the OK button to appear after saving login info
-        time.sleep(2)
-        
-        ok_button_selectors = [
-            # French: "D'accord", "OK"
-            "//button[contains(text(), \"D'accord\")]",
-            "//button[contains(text(), 'OK')]",
-            "//button[contains(text(), 'Ok')]",
-            "//div[@role='button' and contains(text(), \"D'accord\")]",
-            "//div[@role='button' and contains(text(), 'OK')]",
-            "//div[@role='button' and contains(text(), 'Ok')]",
-            # English: "OK", "Got it", "Continue"
-            "//button[contains(text(), 'Got it')]",
-            "//button[contains(text(), 'Continue')]",
-            "//div[@role='button' and contains(text(), 'Got it')]",
-            "//div[@role='button' and contains(text(), 'Continue')]",
-            # Large/prominent OK buttons (big button)
-            "//div[@role='dialog']//button[contains(text(), 'OK')]",
-            "//div[@role='dialog']//button[contains(text(), \"D'accord\")]",
-            "//div[@role='dialog']//div[@role='button' and contains(text(), 'OK')]",
-            "//div[@role='dialog']//div[@role='button' and contains(text(), \"D'accord\")]",
-            # By aria-label
-            "//button[@aria-label='OK']",
-            "//button[@aria-label=\"D'accord\"]",
-        ]
-        
-        # Try multiple times as the OK button might take a moment to appear
-        max_attempts = 5
-        ok_button_clicked = False
-        for attempt in range(max_attempts):
-            for selector in ok_button_selectors:
-                try:
-                    buttons = driver.find_elements(By.XPATH, selector)
-                    for button in buttons:
-                        if button.is_displayed():
-                            try:
-                                # Check if it's a "big" button (larger size indicates it's the prominent OK)
-                                size = button.size
-                                if size['height'] > 30 or size['width'] > 100:  # Large button
-                                    driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                                    time.sleep(0.5)
-                                    button.click()
-                                    print("  âœ“ Clicked big OK button popup")
-                                    ok_button_clicked = True
-                                    time.sleep(2)
-                                    break
-                            except Exception as e:
-                                continue
-                    if ok_button_clicked:
-                        break
-                except:
-                    continue
-            if ok_button_clicked:
-                break
-            
-            # If not found, wait a bit and try again
-            if attempt < max_attempts - 1:
-                time.sleep(1)
-        
-        if not ok_button_clicked:
-            print("  No OK button popup found (may not appear)")
-        
-        print("Finished handling post-login prompts")
-        time.sleep(1)  # Final wait after handling prompts
-        
-    except Exception as e:
-        # Silently fail - prompts might not be present
-        print(f"  Note: Could not handle post-login prompts: {e}")
-
-
-def _find_login_button_robust(driver):
-    """
-    Find the login button on Instagram login page using multiple strategies.
-    Handles both English and French variants, with robust fallback logic.
+    Post images to Instagram using Graph API.
     
     Args:
-        driver: Selenium WebDriver instance
+        image_paths: List of image file paths (single or carousel)
+        caption: Caption text for the post
+        access_token: Instagram Graph API access token (uses config if not provided)
+        instagram_account_id: Your Instagram Business Account ID (uses config if not provided)
         
     Returns:
-        WebElement or None: The login button element if found, None otherwise
+        bool: True if posting successful, False otherwise
     """
-    from selenium.webdriver.common.by import By
+    # Get credentials from parameters, config, or environment
+    if not access_token:
+        access_token = getattr(config, 'INSTAGRAM_ACCESS_TOKEN', None)
+        if not access_token:
+            access_token = os.getenv('INSTAGRAM_ACCESS_TOKEN')
     
-    # Comprehensive list of selectors, ordered by specificity
-    login_selectors = [
-        # Generic submit button (highest priority - most reliable)
-        "button[type='submit']",
-        
-        # English text variants
-        "//button[contains(text(), 'Log in')]",
-        "//button[contains(text(), 'Log In')]",
-        "//div[@role='button' and contains(text(), 'Log in')]",
-        "//div[@role='button' and contains(text(), 'Log In')]",
-        # Divs containing nested spans with English login text (for Instagram's div-based buttons)
-        "//div[.//span[contains(text(), 'Log in')]]",
-        "//div[.//span[contains(text(), 'Log In')]]",
-        # More specific: find span with login text, then get its ancestor div with x1ja2u2z class
-        "//span[contains(text(), 'Log in')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
-        "//span[contains(text(), 'Log In')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
-        
-        # French text variants
-        "//button[contains(text(), 'Se connecter')]",
-        "//button[contains(text(), 'Se Connecter')]",
-        "//button[contains(text(), 'Connexion')]",
-        "//div[@role='button' and contains(text(), 'Se connecter')]",
-        "//div[@role='button' and contains(text(), 'Se Connecter')]",
-        "//div[@role='button' and contains(text(), 'Connexion')]",
-        # Divs containing nested spans with French login text (for Instagram's div-based buttons)
-        "//div[.//span[contains(text(), 'Se connecter')]]",
-        "//div[.//span[contains(text(), 'Se Connecter')]]",
-        "//div[.//span[contains(text(), 'Connexion')]]",
-        # More specific: find span with login text, then get its outermost ancestor div with x1ja2u2z class
-        "//span[contains(text(), 'Se connecter')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
-        "//span[contains(text(), 'Se Connecter')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
-        "//span[contains(text(), 'Connexion')]/ancestor::div[contains(@class, 'x1ja2u2z')][1]",
-        
-        # Aria-label based selectors (case insensitive matching via contains)
-        "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login')]",
-        "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connecter')]",
-        "//button[contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connexion')]",
-        "//div[@role='button' and contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login')]",
-        "//div[@role='button' and contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connecter')]",
-        
-        # Form context-based selectors (find submit button within login form)
-        "//form//button[@type='submit']",
-        "//form//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login')]",
-        "//form//button[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'connecter')]",
-        "//form//div[@role='button' and @type='submit']",
-    ]
+    if not instagram_account_id:
+        instagram_account_id = getattr(config, 'INSTAGRAM_ACCOUNT_ID', None)
+        if not instagram_account_id:
+            instagram_account_id = os.getenv('INSTAGRAM_ACCOUNT_ID')
     
-    # Try each selector
-    for selector in login_selectors:
-        try:
-            if selector.startswith("//"):
-                elements = driver.find_elements(By.XPATH, selector)
-            else:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-            
-            # Check each element to see if it's displayed and enabled
-            for element in elements:
-                try:
-                    # Check if displayed
-                    if not element.is_displayed():
-                        continue
-                    
-                    # For buttons, check if enabled; for divs, just check if they're visible
-                    try:
-                        if element.tag_name.lower() == 'button':
-                            if not element.is_enabled():
-                                continue
-                        # For divs, check if they're not disabled via attribute
-                        elif element.tag_name.lower() == 'div':
-                            if element.get_attribute('disabled') is not None or element.get_attribute('aria-disabled') == 'true':
-                                continue
-                    except:
-                        # If is_enabled() doesn't exist (for divs), continue anyway if displayed
-                        pass
-                    
-                    return element
-                except:
-                    continue
-        except:
-            continue
+    if not access_token or not instagram_account_id:
+        print("⚠️  Instagram Graph API credentials not configured")
+        print("   Please set INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID in config.py")
+        print("   or as environment variables")
+        return False
     
-    # Fallback: Use JavaScript to find submit button in forms with password fields
     try:
-        login_button_js = driver.execute_script("""
-            // Strategy 1: Look for divs containing "Se connecter" or "Log in" text in nested spans
-            var loginTexts = ['Se connecter', 'Se Connecter', 'Log in', 'Log In'];
-            for (var t = 0; t < loginTexts.length; t++) {
-                var text = loginTexts[t];
-                // Find all spans containing the login text
-                var spans = Array.from(document.querySelectorAll('span'));
-                for (var s = 0; s < spans.length; s++) {
-                    var span = spans[s];
-                    if (span.textContent && span.textContent.trim() === text) {
-                        // Find the outermost clickable div ancestor
-                        var parent = span.parentElement;
-                        var depth = 0;
-                        while (parent && depth < 10) {
-                            // Look for divs that might be clickable (have pointer cursor, or contain class x1ja2u2z)
-                            if (parent.tagName === 'DIV' && 
-                                (parent.classList.contains('x1ja2u2z') || 
-                                 window.getComputedStyle(parent).cursor === 'pointer' ||
-                                 parent.onclick !== null ||
-                                 parent.getAttribute('role') === 'button')) {
-                                // Check if it's visible
-                                if (parent.offsetParent !== null && parent.offsetWidth > 0 && parent.offsetHeight > 0) {
-                                    return parent;
-                                }
-                            }
-                            parent = parent.parentElement;
-                            depth++;
-                        }
-                    }
-                }
-            }
-            
-            // Strategy 2: Find all password input fields and look for nearby submit buttons
-            var passwordInputs = document.querySelectorAll('input[type="password"]');
-            if (passwordInputs.length > 0) {
-                for (var i = 0; i < passwordInputs.length; i++) {
-                    var passwordInput = passwordInputs[i];
-                    var form = passwordInput.closest('form');
-                    
-                    if (form) {
-                        // Look for submit button in the form
-                        var submitButton = form.querySelector('button[type="submit"]');
-                        if (submitButton && submitButton.offsetParent !== null) {
-                            if (!submitButton.hasAttribute('disabled') && !submitButton.disabled) {
-                                return submitButton;
-                            }
-                        }
-                    }
-                    
-                    // Look for buttons in parent containers
-                    var parent = passwordInput.parentElement;
-                    var depth = 0;
-                    while (parent && depth < 5) {
-                        var buttons = parent.querySelectorAll('button[type="submit"], button:not([type]), div[role="button"]');
-                        for (var j = 0; j < buttons.length; j++) {
-                            var btn = buttons[j];
-                            // Check if button is visible and enabled
-                            if (btn.offsetParent !== null && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
-                                // Check if disabled attribute is not present
-                                if (!btn.hasAttribute('disabled') && !btn.disabled) {
-                                    return btn;
-                                }
-                            }
-                        }
-                        parent = parent.parentElement;
-                        depth++;
-                    }
-                }
-            }
-            
-            // Strategy 3: Last resort - find any submit button on the page
-            var allSubmitButtons = document.querySelectorAll('button[type="submit"]');
-            for (var k = 0; k < allSubmitButtons.length; k++) {
-                var btn = allSubmitButtons[k];
-                if (btn.offsetParent !== null && btn.offsetWidth > 0 && btn.offsetHeight > 0) {
-                    if (!btn.hasAttribute('disabled') && !btn.disabled) {
-                        return btn;
-                    }
-                }
-            }
-            
-            return null;
-        """)
-        
-        if login_button_js:
-            return login_button_js
-    except:
-        pass
-    
-    return None
-
-
-def _handle_second_login_at_home(driver, username, password):
-    """
-    Handle the second login at https://www.instagram.com/ after first login.
-    This function fills in credentials using exact selectors provided for the second login form.
-    
-    Args:
-        driver: Selenium WebDriver instance
-        username: Instagram username
-        password: Instagram password
-    
-    Returns:
-        bool: True if login successful, False otherwise
-    """
-    try:
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        
-        print("Handling second login at instagram.com/...")
-        time.sleep(2)  # Wait for page to stabilize
-        
-        # Find username input using exact selector
-        username_input = None
-        try:
-            # Exact selector: input[aria-label="Num. téléphone, nom de profil ou e-mail"][name="username"]
-            username_input = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label="Num. téléphone, nom de profil ou e-mail"][name="username"]'))
-            )
-            if not username_input.is_displayed() or not username_input.is_enabled():
-                username_input = None
-        except:
-            pass
-        
-        # Fallback selectors if exact one doesn't work
-        if not username_input:
-            fallback_selectors = [
-                "input[name='username']",
-                "input[type='text'][name='username']",
-                "//input[@name='username']",
-            ]
-            for selector in fallback_selectors:
-                try:
-                    if selector.startswith("//"):
-                        elements = driver.find_elements(By.XPATH, selector)
-                        for elem in elements:
-                            if elem.is_displayed() and elem.is_enabled():
-                                username_input = elem
-                                break
-                    else:
-                        username_input = driver.find_element(By.CSS_SELECTOR, selector)
-                    if username_input:
-                        break
-                except:
-                    continue
-        
-        if not username_input:
-            print("⚠️  Could not find username input field on second login page")
-            return False
-        
-        # Find password input using exact selector
-        password_input = None
-        try:
-            # Exact selector: input[aria-label="Mot de passe"][type="password"][name="password"]
-            password_input = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[aria-label="Mot de passe"][type="password"][name="password"]'))
-            )
-            if not password_input.is_displayed() or not password_input.is_enabled():
-                password_input = None
-        except:
-            pass
-        
-        # Fallback selectors if exact one doesn't work
-        if not password_input:
-            fallback_selectors = [
-                "input[name='password']",
-                "input[type='password'][name='password']",
-                "//input[@type='password' and @name='password']",
-            ]
-            for selector in fallback_selectors:
-                try:
-                    if selector.startswith("//"):
-                        elements = driver.find_elements(By.XPATH, selector)
-                        for elem in elements:
-                            if elem.is_displayed() and elem.is_enabled():
-                                password_input = elem
-                                break
-                    else:
-                        password_input = driver.find_element(By.CSS_SELECTOR, selector)
-                    if password_input:
-                        break
-                except:
-                    continue
-        
-        if not password_input:
-            print("⚠️  Could not find password input field on second login page")
-            return False
-        
-        # Fill in credentials
-        print(f"Entering username on second login: {username}")
-        username_input.clear()
-        username_input.send_keys(username)
-        time.sleep(1)
-        
-        print("Entering password on second login...")
-        password_input.clear()
-        password_input.send_keys(password)
-        time.sleep(1)
-        
-        # Find login button using exact selector
-        login_button = None
-        try:
-            # Try to find div with class containing key classes and text "Se connecter"
-            # The div has class="html-div xdj266r x14z9mp xat24cr x1lziwak xexx8yu xyri2b..."
-            login_button = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, '//div[contains(@class, "html-div") and contains(@class, "xdj266r") and contains(@class, "x14z9mp") and contains(@class, "xat24cr") and contains(@class, "x1lziwak") and contains(text(), "Se connecter")]'))
-            )
-        except:
-            # Fallback: try simpler XPath with just text "Se connecter"
-            try:
-                login_button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, '//div[contains(text(), "Se connecter")]'))
-                )
-            except:
-                # Try using the robust helper as last resort
-                login_button = _find_login_button_robust(driver)
-        
-        if not login_button:
-            print("⚠️  Could not find login button on second login page")
-            return False
-        
-        print("Clicking login button on second login page...")
-        driver.execute_script("arguments[0].scrollIntoView(true);", login_button)
-        time.sleep(0.5)
-        login_button.click()
-        
-        # Wait 5 seconds after second login as specified
-        print("Waiting 5 seconds after second login...")
-        time.sleep(5)
-        
-        # Check if login was successful
-        current_url = driver.current_url.lower()
-        if "login" not in current_url and "accounts/login" not in current_url:
-            print("✓ Successfully completed second login!")
-            return True
+        if len(image_paths) > 1:
+            # Carousel post (multiple images)
+            print(f"Posting carousel with {len(image_paths)} images...")
+            return _post_carousel(image_paths, caption, access_token, instagram_account_id)
         else:
-            print("⚠️  Still on login page after second login attempt")
-            return False
-            
+            # Single image post
+            print(f"Posting single image: {image_paths[0]}...")
+            return _post_single_image(image_paths[0], caption, access_token, instagram_account_id)
     except Exception as e:
-        print(f"⚠️  Error during second login: {e}")
+        print(f"❌ Error posting to Instagram: {e}")
+        import traceback
         traceback.print_exc()
         return False
 
 
-def _check_and_handle_secondary_login(driver, username, password):
-    """
-    Check if we're on the login page and attempt to login again if needed.
-    This handles cases where Instagram redirects to login page after initial login attempt
-    or when navigating to home page.
+def _upload_image_to_imgur(image_path: str):
+    """Upload image to Imgur and get a public URL for Instagram posting"""
+    # Imgur API endpoint - no authentication required for anonymous uploads
+    upload_url = "https://api.imgur.com/3/image"
     
-    Args:
-        driver: Selenium WebDriver instance
-        username: Instagram username
-        password: Instagram password
-    
-    Returns:
-        bool: True if login successful, False otherwise
-    """
     try:
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
+        print(f"    [DEBUG] Attempting to upload {image_path} to Imgur...")
+        with open(image_path, 'rb') as image_file:
+            files = {'image': image_file}
+            headers = {
+                'Authorization': 'Client-ID 546c25a59c58ad7'  # Public Imgur client ID
+            }
+            response = requests.post(upload_url, files=files, headers=headers)
         
-        # Check current URL to see if we're on login page
-        current_url = driver.current_url.lower()
-        
-        # Also check for login form elements on the page (in case URL doesn't indicate login)
-        # This helps catch login pages that appear after initial login
-        is_login_page = False
-        if "login" in current_url or "accounts/login" in current_url:
-            is_login_page = True
-        else:
-            # Check if login form elements are present (detect login page even if URL doesn't show it)
-            try:
-                # Look for password input field (indicates login form)
-                password_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='password']")
-                # Look for login button text
-                page_text = driver.page_source.lower()
-                if password_inputs and ("se connecter" in page_text or "log in" in page_text or "connexion" in page_text):
-                    is_login_page = True
-            except:
-                pass
-        
-        if not is_login_page:
-            # Not on login page, no action needed
-            return True
-        
-        print("⚠️  Still on login page - Instagram may be asking to login again")
-        print("Attempting to login again...")
-        
-        # Define selectors for login form elements (including French labels)
-        username_selectors = [
-            "input[name='username']",
-            "input[type='text']",
-            # English aria-labels
-            "input[aria-label='Phone number, username, or email']",
-            "input[aria-label*='Phone number']",
-            "input[aria-label*='username']",
-            "input[aria-label*='email']",
-            # French aria-labels
-            "input[aria-label*='Num. téléphone']",
-            "input[aria-label*='nom de profil']",
-            "input[aria-label*='téléphone, nom de profil ou e-mail']",
-            # XPath with contains for French labels
-            "//input[@type='text' and contains(@aria-label, 'téléphone')]",
-            "//input[@type='text' and contains(@aria-label, 'nom de profil')]",
-            "//input[@type='text' and contains(@aria-label, 'e-mail')]",
-            # Placeholder selectors
-            "input[placeholder*='username']",
-            "input[placeholder*='Phone number']",
-            "input[placeholder*='téléphone']",
-            "input[placeholder*='profil']",
-        ]
-        
-        password_selectors = [
-            "input[name='password']",
-            "input[type='password']",
-            # English aria-labels
-            "input[aria-label='Password']",
-            "input[aria-label*='Password']",
-            # French aria-labels
-            "input[aria-label='Mot de passe']",
-            "input[aria-label*='Mot de passe']",
-            # XPath with contains for French labels
-            "//input[@type='password' and contains(@aria-label, 'Mot de passe')]",
-            "//input[@type='password' and contains(@aria-label, 'password')]",
-            # Placeholder selectors
-            "input[placeholder*='Password']",
-            "input[placeholder*='Mot de passe']",
-            "input[placeholder*='passe']",
-        ]
-        
-        # Wait a moment for the page to stabilize
-        time.sleep(2)
-        
-        # Try to find username and password fields again
-        username_input_retry = None
-        for selector in username_selectors:
-            try:
-                if selector.startswith("//"):
-                    # XPath selector
-                    elements = WebDriverWait(driver, 5).until(
-                        EC.presence_of_all_elements_located((By.XPATH, selector))
-                    )
-                    for elem in elements:
-                        if elem.is_displayed() and elem.is_enabled():
-                            username_input_retry = elem
-                            break
-                else:
-                    # CSS selector
-                    username_input_retry = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                    )
-                if username_input_retry:
-                    break
-            except:
-                continue
-        
-        password_input_retry = None
-        for selector in password_selectors:
-            try:
-                if selector.startswith("//"):
-                    # XPath selector
-                    elements = driver.find_elements(By.XPATH, selector)
-                    for elem in elements:
-                        if elem.is_displayed() and elem.is_enabled():
-                            password_input_retry = elem
-                            break
-                else:
-                    # CSS selector
-                    password_input_retry = driver.find_element(By.CSS_SELECTOR, selector)
-                if password_input_retry:
-                    break
-            except:
-                continue
-        
-        if not username_input_retry or not password_input_retry:
-            print("⚠️  Could not find login form fields for retry")
-            return False
-        
-        # Fill in credentials again
-        print(f"Re-entering username: {username}")
-        username_input_retry.clear()
-        username_input_retry.send_keys(username)
-        time.sleep(1)
-        
-        print("Re-entering password...")
-        password_input_retry.clear()
-        password_input_retry.send_keys(password)
-        time.sleep(1)
-        
-        # Find and click login button again using robust helper
-        login_button_retry = _find_login_button_robust(driver)
-        
-        if not login_button_retry:
-            print("⚠️  Could not find login button for retry")
-            return False
-        
-        print("Clicking login button again...")
-        login_button_retry.click()
-        time.sleep(5)  # Wait for login to process
-        
-        # Check if login was successful this time
-        current_url_retry = driver.current_url.lower()
-        if "instagram.com" in current_url_retry and "login" not in current_url_retry and "accounts/login" not in current_url_retry:
-            # Verify we're actually logged in by navigating to home
-            driver.get("https://www.instagram.com")
-            time.sleep(3)
-            
-            current_url_retry = driver.current_url.lower()
-            if "login" not in current_url_retry and "accounts/login" not in current_url_retry:
-                print("✓ Successfully logged in to Instagram after retry!")
-                # Handle post-login prompts (save login info, OK button)
-                _handle_post_login_prompts(driver)
-                return True
+        print(f"    [DEBUG] Imgur response status: {response.status_code}")
+        if response.status_code == 200:
+            result = response.json()
+            print(f"    [DEBUG] Imgur response JSON: {result}")
+            if result.get('success') and result.get('data', {}).get('link'):
+                image_url = result['data']['link']
+                # Convert .gif to .jpg if needed (Instagram prefers .jpg)
+                if image_url.endswith('.gif'):
+                    image_url = image_url.replace('.gif', '.jpg')
+                print(f"    [DEBUG] Imgur upload successful, URL: {image_url}")
+                return image_url
             else:
-                print("⚠️  Login retry verification failed - redirected back to login page")
-                return False
+                print(f"⚠️  Imgur upload response indicates failure: {result}")
+                return None
         else:
-            # Still on login page after retry - login failed
-            print("⚠️  Login retry failed - still on login page")
-            print("This might indicate incorrect credentials or a login error.")
+            print(f"⚠️  Imgur upload failed with status {response.status_code}")
+            print(f"    [DEBUG] Response text: {response.text}")
+            return None
+    except Exception as e:
+        print(f"⚠️  Error uploading to Imgur: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def _post_single_image(image_path: str, caption: str, access_token: str, account_id: str):
+    """Post a single image to Instagram using Graph API"""
+    # Step 1: Upload image to Imgur to get a public URL
+    print("Uploading image to temporary storage (Imgur)...")
+    image_url = _upload_image_to_imgur(image_path)
+    
+    if not image_url:
+        # Fallback: try direct file upload with different parameter name
+        print("Trying direct file upload...")
+        image_url = None
+        try:
+            # Try using the file directly in the request
+            url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+            with open(image_path, 'rb') as image_file:
+                # Try using 'file' parameter instead of 'image'
+                files = {'file': image_file}
+                params = {
+                    'caption': caption,
+                    'access_token': access_token
+                }
+                response = requests.post(url, files=files, params=params)
+                if response.status_code == 200:
+                    creation_id = response.json().get('id')
+                    if creation_id:
+                        # Step 2: Publish
+                        url = f"https://graph.facebook.com/v18.0/{account_id}/media_publish"
+                        params = {
+                            'creation_id': creation_id,
+                            'access_token': access_token
+                        }
+                        response = requests.post(url, params=params)
+                        if response.status_code == 200:
+                            post_id = response.json().get('id', 'unknown')
+                            print(f"✓ Successfully posted to Instagram! (Post ID: {post_id})")
+                            return True
+        except Exception as e:
+            print(f"⚠️  Direct upload failed: {e}")
+    
+    if not image_url:
+        print(f"❌ Could not upload image. Please ensure image is publicly accessible or use image_url parameter.")
+        return False
+    
+    if not os.path.exists(image_path):
+        print(f"❌ Image file not found: {image_path}")
+        return False
+    
+    try:
+        # Step 1: Create media container using image_url
+        url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+        params = {
+            'image_url': image_url,
+            'caption': caption,
+            'access_token': access_token
+        }
+        response = requests.post(url, params=params)
+        
+        if response.status_code != 200:
+            error_data = response.json() if response.content else {}
+            print(f"❌ Error creating media container: {error_data}")
+            return False
+        
+        creation_id = response.json().get('id')
+        if not creation_id:
+            print(f"❌ No creation ID returned: {response.json()}")
+            return False
+        
+        # Step 2: Publish the media
+        url = f"https://graph.facebook.com/v18.0/{account_id}/media_publish"
+        params = {
+            'creation_id': creation_id,
+            'access_token': access_token
+        }
+        response = requests.post(url, params=params)
+        
+        if response.status_code == 200:
+            post_id = response.json().get('id', 'unknown')
+            print(f"✓ Successfully posted to Instagram! (Post ID: {post_id})")
+            return True
+        else:
+            error_data = response.json() if response.content else {}
+            print(f"❌ Error publishing post: {error_data}")
             return False
             
-    except Exception as retry_error:
-        print(f"⚠️  Error during login retry: {retry_error}")
+    except FileNotFoundError:
+        print(f"❌ Image file not found: {image_path}")
+        return False
+    except Exception as e:
+        print(f"❌ Unexpected error during single image post: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
-def login_to_instagram(driver, username=None, password=None):
+def _wait_for_media_ready(media_id: str, access_token: str, max_wait_time: int = 60, check_interval: int = 2):
     """
-    Automatically log in to Instagram with provided credentials.
+    Wait for a media container to be ready for publishing.
     
     Args:
-        driver: Selenium WebDriver instance
-        username: Instagram username (if None, tries to get from config)
-        password: Instagram password (if None, tries to get from config)
+        media_id: The media container ID to check
+        access_token: Instagram Graph API access token
+        max_wait_time: Maximum time to wait in seconds (default: 60)
+        check_interval: Time between status checks in seconds (default: 2)
     
     Returns:
-        bool: True if login successful, False otherwise
+        bool: True if media is ready, False if timeout or error
     """
-    # Import Selenium classes needed for login
-    try:
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-    except ImportError:
-        print("âš  Selenium not available for automatic login")
-        return False
+    url = f"https://graph.facebook.com/v18.0/{media_id}"
+    params = {
+        'fields': 'status_code',
+        'access_token': access_token
+    }
     
-    # Get credentials from parameters or config
-    if username is None:
-        username = getattr(config, 'INSTAGRAM_USERNAME', None)
-    if password is None:
-        password = getattr(config, 'INSTAGRAM_PASSWORD', None)
+    # Give Instagram a moment to process the container before checking status
+    print(f"  [DEBUG] Initial wait before checking status...")
+    time.sleep(2)
     
-    # If no credentials provided, return False to use manual login
-    if not username or not password:
-        return False
+    elapsed_time = 2
+    print(f"  [DEBUG] Waiting for media {media_id} to be ready (max {max_wait_time}s)...")
     
-    try:
-        print("Attempting automatic login to Instagram...")
-        driver.get("https://www.instagram.com/accounts/login/")
-        time.sleep(3)
-        
-        # Find username/email input field
-        username_selectors = [
-            "input[name='username']",
-            "input[type='text']",
-            # English aria-labels
-            "input[aria-label='Phone number, username, or email']",
-            "input[aria-label*='Phone number']",
-            "input[aria-label*='username']",
-            "input[aria-label*='email']",
-            # French aria-labels
-            "input[aria-label*='Num. téléphone']",
-            "input[aria-label*='nom de profil']",
-            "input[aria-label*='téléphone, nom de profil ou e-mail']",
-            # XPath with contains for French labels
-            "//input[@type='text' and contains(@aria-label, 'téléphone')]",
-            "//input[@type='text' and contains(@aria-label, 'nom de profil')]",
-            "//input[@type='text' and contains(@aria-label, 'e-mail')]",
-            # Placeholder selectors
-            "input[placeholder*='username']",
-            "input[placeholder*='Phone number']",
-            "input[placeholder*='téléphone']",
-            "input[placeholder*='profil']",
-        ]
-        
-        username_input = None
-        for selector in username_selectors:
-            try:
-                if selector.startswith("//"):
-                    # XPath selector
-                    elements = WebDriverWait(driver, 5).until(
-                        EC.presence_of_all_elements_located((By.XPATH, selector))
-                    )
-                    for elem in elements:
-                        if elem.is_displayed() and elem.is_enabled():
-                            username_input = elem
-                            break
-                else:
-                    # CSS selector
-                    username_input = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                    )
-                if username_input:
-                    break
-            except:
-                continue
-        
-        if not username_input:
-            print("âš  Could not find username input field")
-            return False
-
-        # Find password input field
-        password_selectors = [
-            "input[name='password']",
-            "input[type='password']",
-            # English aria-labels
-            "input[aria-label='Password']",
-            "input[aria-label*='Password']",
-            # French aria-labels
-            "input[aria-label='Mot de passe']",
-            "input[aria-label*='Mot de passe']",
-            # XPath with contains for French labels
-            "//input[@type='password' and contains(@aria-label, 'Mot de passe')]",
-            "//input[@type='password' and contains(@aria-label, 'password')]",
-            # Placeholder selectors
-            "input[placeholder*='Password']",
-            "input[placeholder*='Mot de passe']",
-            "input[placeholder*='passe']",
-        ]
-
-        password_input = None
-        for selector in password_selectors:
-            try:
-                if selector.startswith("//"):
-                    # XPath selector
-                    elements = driver.find_elements(By.XPATH, selector)
-                    for elem in elements:
-                        if elem.is_displayed() and elem.is_enabled():
-                            password_input = elem
-                            break
-                else:
-                    # CSS selector
-                    password_input = driver.find_element(By.CSS_SELECTOR, selector)
-                if password_input:
-                    break
-            except:
-                continue
-        
-        if not password_input:
-            print("âš  Could not find password input field")
-            return False
-        
-        # Fill in credentials
-        print(f"Entering username: {username}")
-        username_input.clear()
-        username_input.send_keys(username)
-        time.sleep(1)
-        
-        print("Entering password...")
-        password_input.clear()
-        password_input.send_keys(password)
-        time.sleep(1)
-        
-        # Find and click login button using robust helper
-        login_button = _find_login_button_robust(driver)
-        
-        if login_button:
-            print("Clicking first login button...")
-            login_button.click()
-            print("Waiting 5 seconds after first login...")
-            time.sleep(5)  # Wait 5 seconds after first login as specified
+    while elapsed_time < max_wait_time:
+        try:
+            response = requests.get(url, params=params)
+            print(f"  [DEBUG] Status check response: {response.status_code}")
             
-            # Check current URL and detect if we need second login
-            current_url = driver.current_url.lower()
-            
-            # Check if we're on instagram.com/ and need second login
-            needs_second_login = False
-            
-            # Check if we're on instagram.com/ (not /accounts/login/)
-            if "instagram.com" in current_url and "accounts/login" not in current_url:
-                # Check if login form is present on the page
-                try:
-                    # Look for password input field (indicates login form)
-                    password_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='password']")
-                    # Check for login button text
-                    page_text = driver.page_source.lower()
-                    if password_inputs and ("se connecter" in page_text or "log in" in page_text or "connexion" in page_text):
-                        needs_second_login = True
-                        print("Detected second login form at instagram.com/")
-                except:
-                    pass
-            
-            # Handle second login if needed
-            if needs_second_login:
-                print("Performing second login at instagram.com/...")
-                second_login_success = _handle_second_login_at_home(driver, username, password)
-                if not second_login_success:
-                    print("⚠️  Second login failed")
+            if response.status_code == 200:
+                result = response.json()
+                status_code = result.get('status_code')
+                print(f"  [DEBUG] Media {media_id} status: {status_code}")
+                
+                # Status codes: "FINISHED" = ready, "IN_PROGRESS" = processing, "ERROR" = failed
+                if status_code == "FINISHED":
+                    print(f"  ✓ Media {media_id} is ready!")
+                    return True
+                elif status_code == "ERROR":
+                    error_info = result.get('status', 'Unknown error')
+                    print(f"  ❌ Media {media_id} processing failed: {error_info}")
                     return False
-                # Second login completed successfully (already waited 5 seconds in the function)
+                # If IN_PROGRESS or unknown/None, continue waiting
+                elif status_code:
+                    print(f"  [DEBUG] Status is '{status_code}', waiting...")
+            elif response.status_code == 400:
+                # Sometimes the status endpoint isn't immediately available
+                error_data = response.json() if response.content else {}
+                error_msg = error_data.get('error', {}).get('message', '')
+                if 'not available' in error_msg.lower() or 'not found' in error_msg.lower():
+                    print(f"  [DEBUG] Status endpoint not yet available, waiting...")
+                else:
+                    print(f"  [DEBUG] Status check error: {error_data}")
             else:
-                # Check if we're already logged in (no second login needed)
-                if "instagram.com" in current_url and "login" not in current_url and "accounts/login" not in current_url:
-                    # Verify we're actually logged in by navigating to home
-                    driver.get("https://www.instagram.com")
-                    time.sleep(3)
-                    
-                    current_url = driver.current_url.lower()
-                    if "login" not in current_url and "accounts/login" not in current_url:
-                        print("✓ Successfully logged in to Instagram (only one login required)!")
+                print(f"  [DEBUG] Status check failed: {response.status_code} - {response.text[:200]}")
+            
+            time.sleep(check_interval)
+            elapsed_time += check_interval
+            
+        except Exception as e:
+            print(f"  [DEBUG] Error checking media status: {e}")
+            import traceback
+            traceback.print_exc()
+            time.sleep(check_interval)
+            elapsed_time += check_interval
+    
+    print(f"  ⚠️  Timeout waiting for media {media_id} to be ready after {max_wait_time} seconds")
+    print(f"  [DEBUG] Will attempt to publish anyway - sometimes status check fails but media is ready")
+    return True  # Return True to allow publishing attempt even if status check times out
+
+
+def _post_carousel(image_paths: List[str], caption: str, access_token: str, account_id: str):
+    """Post a carousel (multiple images) to Instagram using Graph API"""
+    children = []
+    
+    print(f"[DEBUG] Starting carousel post with {len(image_paths)} images")
+    print(f"[DEBUG] Account ID: {account_id[:10]}..." if account_id else "[DEBUG] Account ID: None")
+    print(f"[DEBUG] Access token present: {bool(access_token)}")
+    
+    # Step 1: Upload each image and get its media ID
+    print(f"Uploading {len(image_paths)} images...")
+    for idx, image_path in enumerate(image_paths, 1):
+        print(f"\n[DEBUG] Processing image {idx}/{len(image_paths)}: {image_path}")
+        if not os.path.exists(image_path):
+            print(f"❌ Image file not found: {image_path}")
+            print(f"[DEBUG] Current working directory: {os.getcwd()}")
+            return False
+        
+        print(f"[DEBUG] Image file exists, size: {os.path.getsize(image_path)} bytes")
+        
+        # First, upload image to Imgur to get a public URL
+        print(f"  Uploading image {idx}/{len(image_paths)} to temporary storage (Imgur)...")
+        image_url = _upload_image_to_imgur(image_path)
+        
+        if not image_url:
+            # Fallback: try direct upload
+            print(f"  [DEBUG] Imgur upload failed, trying direct Instagram upload...")
+            try:
+                url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+                print(f"  [DEBUG] Direct upload URL: {url}")
+                with open(image_path, 'rb') as image_file:
+                    files = {'file': image_file}
+                    params = {
+                        'is_carousel_item': True,
+                        'access_token': access_token
+                    }
+                    print(f"  [DEBUG] Sending direct upload request...")
+                    response = requests.post(url, files=files, params=params)
+                    print(f"  [DEBUG] Direct upload response status: {response.status_code}")
+                    print(f"  [DEBUG] Direct upload response: {response.text[:500]}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        media_id = result.get('id')
+                        if media_id:
+                            children.append(media_id)
+                            print(f"  ✓ Uploaded image {idx}/{len(image_paths)} (media_id: {media_id})")
+                            continue
+                        else:
+                            print(f"  [DEBUG] No media ID in response: {result}")
                     else:
-                        # Still on login page - might need second login
-                        print("Detected login form after navigation, attempting second login...")
-                        second_login_success = _handle_second_login_at_home(driver, username, password)
-                        if not second_login_success:
-                            print("⚠️  Second login failed")
-                            return False
+                        error_data = response.json() if response.content else {}
+                        print(f"  [DEBUG] Direct upload failed: {error_data}")
+            except Exception as e:
+                print(f"  ⚠️  Direct upload failed: {e}")
+                import traceback
+                traceback.print_exc()
             
-            # Verify final login status
-            time.sleep(2)
-            driver.get("https://www.instagram.com")
-            time.sleep(3)
+            print(f"❌ Error uploading image {idx}/{len(image_paths)} ({image_path}): Could not get image URL")
+            return False
+        
+        url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+        
+        try:
+            # Use image_url parameter
+            params = {
+                'image_url': image_url,
+                'is_carousel_item': True,
+                'access_token': access_token
+            }
+            print(f"  [DEBUG] Creating Instagram media container with URL: {url}")
+            print(f"  [DEBUG] Image URL: {image_url}")
+            response = requests.post(url, params=params)
+            print(f"  [DEBUG] Instagram API response status: {response.status_code}")
+            print(f"  [DEBUG] Instagram API response: {response.text[:500]}")
             
-            current_url = driver.current_url.lower()
-            if "login" not in current_url and "accounts/login" not in current_url:
-                print("✓ Successfully logged in to Instagram after two-step login!")
-                # Handle post-login prompts (save login info, OK button)
-                _handle_post_login_prompts(driver)
-                return True
-            else:
-                print("âš  Login verification failed - still on login page after two-step login")
+            if response.status_code != 200:
+                error_data = response.json() if response.content else {}
+                print(f"❌ Error uploading image {idx}/{len(image_paths)} ({image_path}): {error_data}")
                 return False
+            
+            result = response.json()
+            media_id = result.get('id')
+            if not media_id:
+                print(f"❌ No media ID returned for image {idx}: {result}")
+                return False
+            
+            children.append(media_id)
+            print(f"  ✓ Uploaded image {idx}/{len(image_paths)} (media_id: {media_id})")
+            
+        except FileNotFoundError:
+            print(f"❌ Image file not found: {image_path}")
+            return False
+        except Exception as e:
+            print(f"❌ Error uploading image {idx}: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    print(f"\n[DEBUG] Successfully collected {len(children)} media IDs: {children}")
+    
+    # Step 2: Create carousel container
+    if len(children) == 0:
+        print(f"❌ No media IDs collected! Cannot create carousel.")
+        return False
+    
+    print("Creating carousel container...")
+    url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+    children_str = ','.join(children)
+    params = {
+        'media_type': 'CAROUSEL',
+        'caption': caption,
+        'children': children_str,
+        'access_token': access_token
+    }
+    
+    print(f"[DEBUG] Carousel container URL: {url}")
+    print(f"[DEBUG] Carousel children: {children_str}")
+    print(f"[DEBUG] Caption length: {len(caption)} characters")
+    
+    try:
+        response = requests.post(url, params=params)
+        print(f"[DEBUG] Carousel container creation response status: {response.status_code}")
+        print(f"[DEBUG] Carousel container creation response: {response.text[:500]}")
+        
+        if response.status_code != 200:
+            error_data = response.json() if response.content else {}
+            print(f"❌ Error creating carousel: {error_data}")
+            print(f"[DEBUG] Full response: {response.text}")
+            return False
+
+        result = response.json()
+        creation_id = result.get('id')
+        if not creation_id:
+            print(f"❌ No creation ID returned for carousel: {result}")
+            return False
+        
+        print(f"[DEBUG] Carousel creation ID: {creation_id}")
+        
+        # Step 2.5: Wait for carousel container to be ready before publishing
+        print("Waiting for carousel container to be ready...")
+        if not _wait_for_media_ready(creation_id, access_token, max_wait_time=120, check_interval=3):
+            print(f"❌ Carousel container {creation_id} did not become ready in time")
+            return False
+        
+        # Step 3: Publish the carousel
+        print("Publishing carousel...")
+        url = f"https://graph.facebook.com/v18.0/{account_id}/media_publish"
+        params = {
+            'creation_id': creation_id,
+            'access_token': access_token
+        }
+        print(f"[DEBUG] Publish URL: {url}")
+        print(f"[DEBUG] Publish creation_id: {creation_id}")
+        response = requests.post(url, params=params)
+        print(f"[DEBUG] Publish response status: {response.status_code}")
+        print(f"[DEBUG] Publish response: {response.text[:500]}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            post_id = result.get('id', 'unknown')
+            print(f"✓ Successfully posted carousel to Instagram! (Post ID: {post_id})")
+            return True
         else:
-            print("âš  Could not find login button")
+            error_data = response.json() if response.content else {}
+            error_code = error_data.get('error', {}).get('code')
+            error_subcode = error_data.get('error', {}).get('error_subcode')
+            
+            # If still getting "not ready" error, wait a bit more and retry
+            if error_code == 9007 and error_subcode == 2207027:
+                print(f"⚠️  Media still not ready, waiting additional 10 seconds and retrying...")
+                time.sleep(10)
+                
+                if _wait_for_media_ready(creation_id, access_token, max_wait_time=60, check_interval=2):
+                    # Retry publishing
+                    print("Retrying publish...")
+                    response = requests.post(url, params=params)
+                    print(f"[DEBUG] Retry publish response status: {response.status_code}")
+                    print(f"[DEBUG] Retry publish response: {response.text[:500]}")
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        post_id = result.get('id', 'unknown')
+                        print(f"✓ Successfully posted carousel to Instagram! (Post ID: {post_id})")
+                        return True
+            
+            print(f"❌ Error publishing carousel: {error_data}")
+            print(f"[DEBUG] Full publish response: {response.text}")
             return False
             
     except Exception as e:
-        print(f"âš  Error during automatic login: {e}")
+        print(f"❌ Unexpected error during carousel post: {e}")
+        import traceback
         traceback.print_exc()
         return False
 
 
-def post_to_instagram(image_paths, caption="", username=None, password=None, driver=None):
-    """
-    Post images to Instagram using browser automation.
-    If driver is provided, reuses existing browser session.
-    """
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.chrome.service import Service
-        from selenium.webdriver.chrome.options import Options
-        
-        browser_created = False
-        if driver is None:
-            # Create new browser if none provided
-            chrome_options = Options()
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
-            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            # Keep browser open even if there's an error
-            chrome_options.add_experimental_option("detach", True)
-            
-            driver = webdriver.Chrome(options=chrome_options)
-            browser_created = True
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            # Login logic here...
-            login_success = login_to_instagram(driver, username, password)
-            # ... rest of login handling ...
-        else:
-            # Reuse existing driver - check if still logged in
-            print("Reusing existing browser session...")
-            driver.get("https://www.instagram.com")
-            time.sleep(2)
-            
-            # Check if we need to login again
-            if "login" in driver.current_url.lower() or "accounts/login" in driver.current_url:
-                print("Session expired, logging in again...")
-                login_success = login_to_instagram(driver, username, password)
-                # ... handle login ...
-        
-        # ... rest of posting logic ...
-        
-        # Only quit if we created the browser
-        if browser_created:
-            driver.quit()
-        else:
-            # Keep browser open for reuse
-            print("Browser session kept open for next post...")
-            return True
-            
-    except Exception as e:
-        # ... error handling ...
-
-
-def post_to_instagram_manual(image_paths, caption=""):
-    """Manual posting method with instructions"""
-    print("\n" + "="*60)
-    print("MANUAL INSTAGRAM POSTING")
-    print("="*60)
-    print(f"Caption: {caption}")
-    print(f"Images to post ({len(image_paths)}):")
-    for i, img in enumerate(image_paths, 1):
-        print(f"  {i}. {os.path.abspath(img)}")
-    print("\nInstructions:")
-    print("1. Open Instagram in your browser")
-    print("2. Click the '+' button to create a new post")
-    if len(image_paths) > 1:
-        print(f"3. Select ALL {len(image_paths)} images listed above (hold Ctrl/Cmd to select multiple)")
-        print("   This will create a carousel/gallery post with all games from this week")
-    else:
-        print("3. Select the image listed above")
-    print(f"4. Add the caption: {caption}")
-    print("5. Click 'Share'")
-    print("\nPress Enter once you have posted...")
-    input()
-    return True
-
-
-def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None, initial_teams=None, game_results_by_week=None):
+def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None, 
+                       initial_teams=None, game_results_by_week=None, driver=None):
     """
     Post images to Instagram with 5 minute intervals between weeks (testing mode).
+    Note: driver parameter is kept for compatibility but not used with Graph API.
     
     Args:
         all_images_by_week: Dictionary mapping week numbers to lists of image filenames
         teams: List of Team objects (for standings and odds calculation)
         upcoming_schedule: Dictionary mapping week numbers to lists of (team1, team2) tuples
-                          representing upcoming matchups
         initial_teams: List of Team objects in their initial state (before any games)
         game_results_by_week: Dictionary mapping week numbers to lists of game_result tuples
+        driver: (Deprecated - kept for compatibility, not used with Graph API)
     """
     import game_logic
     
@@ -1166,10 +521,14 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None, i
         caption = "\n".join(caption_parts)
         
         # Post all images for this week as a single carousel/gallery post
+        print(f"[DEBUG] About to post Week {week} with {len(images)} images")
+        print(f"[DEBUG] Image paths: {images}")
+        print(f"[DEBUG] Caption preview: {caption[:200]}...")
         success = post_to_instagram(images, caption)
         
         if not success:
-            print(f"Warning: Failed to post Week {week} images")
+            print(f"❌ Warning: Failed to post Week {week} images")
+            print(f"[DEBUG] post_to_instagram returned False for Week {week}")
             response = input("Continue to next week? (y/n): ")
             if response.lower() != 'y':
                 break
@@ -1254,4 +613,3 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None, i
                 print(f"Warning: Failed to post tournament matches")
     
     print("\nInstagram posting schedule completed!")
-

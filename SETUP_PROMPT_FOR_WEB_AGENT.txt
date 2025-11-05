@@ -1,0 +1,64 @@
+SETUP PROMPT FOR WEB AGENT - Instagram Graph API Configuration
+
+You need to configure Instagram Graph API credentials for an automated posting system. Complete these steps in order:
+
+OBJECTIVE: Get INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID and add them to config.py
+
+STEP 1: Verify Instagram Business Account
+- Navigate to https://www.instagram.com/accounts/edit/
+- Check if account (@real_cascadia) shows "Business" or "Creator" account type
+- If Personal account, convert: Settings → Account → Switch to Professional Account → Choose Business
+
+STEP 2: Create/Link Facebook Page
+- Go to https://www.facebook.com/pages/create
+- Create a Facebook Page (or use existing)
+- Link it to Instagram: Instagram Settings → Linked Accounts → Facebook → Link Page
+
+STEP 3: Access Meta Developers
+- Go to https://developers.facebook.com/
+- Log in with Facebook account that manages the Instagram Business account
+
+STEP 4: Create Facebook App
+- Click "My Apps" → "Create App"
+- Choose "Business" type
+- App Name: "Cascade Game Simulator"
+- Create App
+
+STEP 5: Add Instagram Graph API
+- In app dashboard: "Add Products" → "Instagram Graph API" → "Set Up"
+
+STEP 6: Get Instagram Account ID
+- Go to "Tools" → "Graph API Explorer"
+- Select your app
+- Generate Access Token (temporary, with permissions: instagram_basic, pages_show_list, pages_read_engagement)
+- Make API call: GET https://graph.facebook.com/v18.0/me/accounts?access_token=TEMP_TOKEN
+- Find your Facebook Page ID
+- Make API call: GET https://graph.facebook.com/v18.0/{page_id}?fields=instagram_business_account&access_token=TEMP_TOKEN
+- Copy the "id" value from instagram_business_account → This is INSTAGRAM_ACCOUNT_ID
+
+STEP 7: Generate Long-Lived Access Token
+- Go to "Tools" → "Access Token Generator"
+- Select your app and Instagram Graph API
+- Select permissions: instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement
+- Generate token
+- Exchange for long-lived token (60 days):
+  GET https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=SHORT_TOKEN
+- Copy the access_token value → This is INSTAGRAM_ACCESS_TOKEN
+
+STEP 8: Update config.py
+- Open config.py file
+- Find: INSTAGRAM_ACCESS_TOKEN = None
+- Replace None with the access token value (in quotes)
+- Find: INSTAGRAM_ACCOUNT_ID = None  
+- Replace None with the account ID value (in quotes)
+- Save file
+
+STEP 9: Test Configuration
+- Verify credentials work by checking if program starts without credential warnings
+
+CRITICAL VALUES TO COLLECT:
+- INSTAGRAM_ACCOUNT_ID: From Step 6 (instagram_business_account.id)
+- INSTAGRAM_ACCESS_TOKEN: From Step 7 (long-lived token from exchange)
+
+Once both values are in config.py, setup is complete!
+
