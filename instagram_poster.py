@@ -95,6 +95,11 @@ def _upload_image_to_imgur(image_path: str):
 
 def _post_single_image(image_path: str, caption: str, access_token: str, account_id: str):
     """Post a single image to Instagram using Graph API"""
+    # Check if file exists before attempting any upload
+    if not os.path.exists(image_path):
+        print(f"❌ Image file not found: {image_path}")
+        return False
+    
     # Step 1: Upload image to Imgur to get a public URL
     print("Uploading image to temporary storage (Imgur)...")
     image_url = _upload_image_to_imgur(image_path)
@@ -105,7 +110,7 @@ def _post_single_image(image_path: str, caption: str, access_token: str, account
         image_url = None
         try:
             # Try using the file directly in the request
-            url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+            url = f"https://graph.facebook.com/v21.0/{account_id}/media"
             with open(image_path, 'rb') as image_file:
                 # Try using 'file' parameter instead of 'image'
                 files = {'file': image_file}
@@ -118,7 +123,7 @@ def _post_single_image(image_path: str, caption: str, access_token: str, account
                     creation_id = response.json().get('id')
                     if creation_id:
                         # Step 2: Publish
-                        url = f"https://graph.facebook.com/v18.0/{account_id}/media_publish"
+                        url = f"https://graph.facebook.com/v21.0/{account_id}/media_publish"
                         params = {
                             'creation_id': creation_id,
                             'access_token': access_token
@@ -135,13 +140,9 @@ def _post_single_image(image_path: str, caption: str, access_token: str, account
         print(f"❌ Could not upload image. Please ensure image is publicly accessible or use image_url parameter.")
         return False
     
-    if not os.path.exists(image_path):
-        print(f"❌ Image file not found: {image_path}")
-        return False
-    
     try:
         # Step 1: Create media container using image_url
-        url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+        url = f"https://graph.facebook.com/v21.0/{account_id}/media"
         params = {
             'image_url': image_url,
             'caption': caption,
@@ -160,7 +161,7 @@ def _post_single_image(image_path: str, caption: str, access_token: str, account
             return False
         
         # Step 2: Publish the media
-        url = f"https://graph.facebook.com/v18.0/{account_id}/media_publish"
+        url = f"https://graph.facebook.com/v21.0/{account_id}/media_publish"
         params = {
             'creation_id': creation_id,
             'access_token': access_token
@@ -199,7 +200,7 @@ def _wait_for_media_ready(media_id: str, access_token: str, max_wait_time: int =
     Returns:
         bool: True if media is ready, False if timeout or error
     """
-    url = f"https://graph.facebook.com/v18.0/{media_id}"
+    url = f"https://graph.facebook.com/v21.0/{media_id}"
     params = {
         'fields': 'status_code',
         'access_token': access_token
@@ -286,7 +287,7 @@ def _post_carousel(image_paths: List[str], caption: str, access_token: str, acco
             # Fallback: try direct upload
             print(f"  [DEBUG] Imgur upload failed, trying direct Instagram upload...")
             try:
-                url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+                url = f"https://graph.facebook.com/v21.0/{account_id}/media"
                 print(f"  [DEBUG] Direct upload URL: {url}")
                 with open(image_path, 'rb') as image_file:
                     files = {'file': image_file}
@@ -318,7 +319,7 @@ def _post_carousel(image_paths: List[str], caption: str, access_token: str, acco
             print(f"❌ Error uploading image {idx}/{len(image_paths)} ({image_path}): Could not get image URL")
             return False
         
-        url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+        url = f"https://graph.facebook.com/v21.0/{account_id}/media"
         
         try:
             # Use image_url parameter
@@ -364,7 +365,7 @@ def _post_carousel(image_paths: List[str], caption: str, access_token: str, acco
         return False
     
     print("Creating carousel container...")
-    url = f"https://graph.facebook.com/v18.0/{account_id}/media"
+    url = f"https://graph.facebook.com/v21.0/{account_id}/media"
     children_str = ','.join(children)
     params = {
         'media_type': 'CAROUSEL',
@@ -404,7 +405,7 @@ def _post_carousel(image_paths: List[str], caption: str, access_token: str, acco
         
         # Step 3: Publish the carousel
         print("Publishing carousel...")
-        url = f"https://graph.facebook.com/v18.0/{account_id}/media_publish"
+        url = f"https://graph.facebook.com/v21.0/{account_id}/media_publish"
         params = {
             'creation_id': creation_id,
             'access_token': access_token

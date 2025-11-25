@@ -460,6 +460,82 @@ def format_standings_for_caption(teams):
     return "\n".join(standings_lines)
 
 
+def format_game_results_for_caption(week_game_results):
+    """
+    Format game results for Instagram caption with scores, scoring breakdown, and upsets.
+    
+    Args:
+        week_game_results: List of tuples (filename, game_result) where game_result contains
+                          team1, team2, team1_score, team2_score, team1_detail, team2_detail, upset
+    
+    Returns:
+        Formatted string with all game details
+    """
+    lines = []
+    lines.append("📊 Game Results:")
+    
+    # Track unique games (avoid duplicates from gemini images)
+    seen_games = set()
+    
+    for item in week_game_results:
+        if isinstance(item, tuple):
+            filename, game_result = item
+            # Skip gemini duplicate images
+            if '_gemini' in filename:
+                continue
+        else:
+            game_result = item
+        
+        # Create a unique key for this game
+        game_key = (game_result['team1'].name, game_result['team2'].name)
+        if game_key in seen_games:
+            continue
+        seen_games.add(game_key)
+        
+        team1 = game_result['team1']
+        team2 = game_result['team2']
+        score1 = game_result['team1_score']
+        score2 = game_result['team2_score']
+        detail1 = game_result['team1_detail']
+        detail2 = game_result['team2_detail']
+        upset = game_result.get('upset', False)
+        
+        # Main score line with upset indicator
+        upset_marker = " 🔥 UPSET!" if upset else ""
+        lines.append(f"{team1.name} {score1} - {score2} {team2.name}{upset_marker}")
+        
+        # Scoring breakdown for team 1
+        cascade1_parts = []
+        if detail1.cascade_runs > 0:
+            cascade1_parts.append(f"{detail1.cascade_runs} cascade runs")
+        if detail1.cascade_throws > 0:
+            cascade1_parts.append(f"{detail1.cascade_throws} cascade throws")
+        if detail1.cascade_kicks > 0:
+            cascade1_parts.append(f"{detail1.cascade_kicks} cascade kicks")
+        cascade1_str = f" ({', '.join(cascade1_parts)})" if cascade1_parts else ""
+        
+        lines.append(f"  {team1.name}: {detail1.runs} runs, {detail1.throws} throws, {detail1.kicks} kicks{cascade1_str}")
+        
+        # Scoring breakdown for team 2
+        cascade2_parts = []
+        if detail2.cascade_runs > 0:
+            cascade2_parts.append(f"{detail2.cascade_runs} cascade runs")
+        if detail2.cascade_throws > 0:
+            cascade2_parts.append(f"{detail2.cascade_throws} cascade throws")
+        if detail2.cascade_kicks > 0:
+            cascade2_parts.append(f"{detail2.cascade_kicks} cascade kicks")
+        cascade2_str = f" ({', '.join(cascade2_parts)})" if cascade2_parts else ""
+        
+        lines.append(f"  {team2.name}: {detail2.runs} runs, {detail2.throws} throws, {detail2.kicks} kicks{cascade2_str}")
+        lines.append("")  # Blank line between games
+    
+    # Remove trailing blank line
+    if lines and lines[-1] == "":
+        lines.pop()
+    
+    return "\n".join(lines)
+
+
 def calculate_standings_up_to_week(initial_teams, game_results_by_week, max_week):
     """
     Calculate standings up to a specific week by replaying games.
