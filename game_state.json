@@ -1,0 +1,446 @@
+{
+  "teams": [
+    {
+      "name": "Apex Predators",
+      "overall_advantage": 3,
+      "run_advantage": 3,
+      "throw_advantage": 3,
+      "kick_advantage": 3,
+      "wins": 13,
+      "losses": 1,
+      "points_for": 194,
+      "points_against": 87,
+      "players": [
+        {
+          "name": "Alex Rivera",
+          "ranking": 4,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Blake Chen",
+          "ranking": 7,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Casey Morgan",
+          "ranking": 6,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Dakota Kim",
+          "ranking": 3,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Eli Thompson",
+          "ranking": 2,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Finley Park",
+          "ranking": 5,
+          "best_stat": "Run",
+          "role": "Runner"
+        },
+        {
+          "name": "Gray Martinez",
+          "ranking": 1,
+          "best_stat": "Throw",
+          "role": "Anchor"
+        }
+      ]
+    },
+    {
+      "name": "Vista Vipers",
+      "overall_advantage": -3,
+      "run_advantage": 0,
+      "throw_advantage": 1,
+      "kick_advantage": -3,
+      "wins": 6,
+      "losses": 8,
+      "points_for": 136,
+      "points_against": 131,
+      "players": [
+        {
+          "name": "Haze Nelson",
+          "ranking": 5,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Iris Carter",
+          "ranking": 4,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Jasper Mitchell",
+          "ranking": 1,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Kestrel Perez",
+          "ranking": 7,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Lark Roberts",
+          "ranking": 2,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Mist Turner",
+          "ranking": 6,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Nimbus Phillips",
+          "ranking": 3,
+          "best_stat": "Run",
+          "role": "Anchor"
+        }
+      ]
+    },
+    {
+      "name": "Skybound Storm",
+      "overall_advantage": 2,
+      "run_advantage": -3,
+      "throw_advantage": 0,
+      "kick_advantage": 0,
+      "wins": 7,
+      "losses": 7,
+      "points_for": 120,
+      "points_against": 145,
+      "players": [
+        {
+          "name": "Finley Park",
+          "ranking": 5,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Gray Martinez",
+          "ranking": 7,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Harper Lee",
+          "ranking": 3,
+          "best_stat": "Run",
+          "role": "Runner"
+        },
+        {
+          "name": "Indigo Singh",
+          "ranking": 6,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Jade Williams",
+          "ranking": 4,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Kai Johnson",
+          "ranking": 2,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Lane Davis",
+          "ranking": 1,
+          "best_stat": "Kick",
+          "role": "Runner"
+        }
+      ]
+    },
+    {
+      "name": "Raven's Renegades",
+      "overall_advantage": -3,
+      "run_advantage": -2,
+      "throw_advantage": 3,
+      "kick_advantage": -3,
+      "wins": 3,
+      "losses": 11,
+      "points_for": 103,
+      "points_against": 171,
+      "players": [
+        {
+          "name": "Storm Collins",
+          "ranking": 2,
+          "best_stat": "Throw",
+          "role": "Anchor"
+        },
+        {
+          "name": "Tide Stewart",
+          "ranking": 7,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Vale Sanchez",
+          "ranking": 4,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Willow Morris",
+          "ranking": 6,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Zen Rogers",
+          "ranking": 1,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Aurora Reed",
+          "ranking": 3,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Blaze Cook",
+          "ranking": 5,
+          "best_stat": "Run",
+          "role": "Runner"
+        }
+      ]
+    },
+    {
+      "name": "Cove Crushers",
+      "overall_advantage": -1,
+      "run_advantage": 2,
+      "throw_advantage": -3,
+      "kick_advantage": 1,
+      "wins": 9,
+      "losses": 5,
+      "points_for": 156,
+      "points_against": 122,
+      "players": [
+        {
+          "name": "Kestrel Perez",
+          "ranking": 5,
+          "best_stat": "Throw",
+          "role": "Anchor"
+        },
+        {
+          "name": "Lark Roberts",
+          "ranking": 2,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Mist Turner",
+          "ranking": 4,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Nimbus Phillips",
+          "ranking": 6,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Onyx Campbell",
+          "ranking": 1,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Pax Parker",
+          "ranking": 7,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Quill Evans",
+          "ranking": 3,
+          "best_stat": "Run",
+          "role": "Runner"
+        }
+      ]
+    },
+    {
+      "name": "Ember Enforcers",
+      "overall_advantage": 1,
+      "run_advantage": 2,
+      "throw_advantage": 2,
+      "kick_advantage": -1,
+      "wins": 7,
+      "losses": 7,
+      "points_for": 151,
+      "points_against": 132,
+      "players": [
+        {
+          "name": "Flame Ward",
+          "ranking": 6,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Glow Bell",
+          "ranking": 5,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Halo Murphy",
+          "ranking": 4,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Iris Alexander",
+          "ranking": 7,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Jewel Wood",
+          "ranking": 3,
+          "best_stat": "Run",
+          "role": "Anchor"
+        },
+        {
+          "name": "Karma Watson",
+          "ranking": 2,
+          "best_stat": "Run",
+          "role": "Runner"
+        },
+        {
+          "name": "Luna Brooks",
+          "ranking": 1,
+          "best_stat": "Throw",
+          "role": "Anchor"
+        }
+      ]
+    },
+    {
+      "name": "Pinnacle Pioneers",
+      "overall_advantage": 3,
+      "run_advantage": -1,
+      "throw_advantage": 3,
+      "kick_advantage": 3,
+      "wins": 8,
+      "losses": 6,
+      "points_for": 119,
+      "points_against": 137,
+      "players": [
+        {
+          "name": "Finley Park",
+          "ranking": 7,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Gray Martinez",
+          "ranking": 5,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Harper Lee",
+          "ranking": 2,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Indigo Singh",
+          "ranking": 1,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Jade Williams",
+          "ranking": 3,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Kai Johnson",
+          "ranking": 6,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Lane Davis",
+          "ranking": 4,
+          "best_stat": "Run",
+          "role": "Anchor"
+        }
+      ]
+    },
+    {
+      "name": "Evan City Vanguards",
+      "overall_advantage": -3,
+      "run_advantage": -2,
+      "throw_advantage": -2,
+      "kick_advantage": 0,
+      "wins": 3,
+      "losses": 11,
+      "points_for": 115,
+      "points_against": 169,
+      "players": [
+        {
+          "name": "Aurora Reed",
+          "ranking": 6,
+          "best_stat": "Throw",
+          "role": "Anchor"
+        },
+        {
+          "name": "Blaze Cook",
+          "ranking": 3,
+          "best_stat": "Throw",
+          "role": "Runner"
+        },
+        {
+          "name": "Cinder Morgan",
+          "ranking": 5,
+          "best_stat": "Throw",
+          "role": "Anchor"
+        },
+        {
+          "name": "Dawn Bailey",
+          "ranking": 1,
+          "best_stat": "Kick",
+          "role": "Anchor"
+        },
+        {
+          "name": "Ember Rivera",
+          "ranking": 2,
+          "best_stat": "Run",
+          "role": "Runner"
+        },
+        {
+          "name": "Flame Ward",
+          "ranking": 4,
+          "best_stat": "Kick",
+          "role": "Runner"
+        },
+        {
+          "name": "Glow Bell",
+          "ranking": 7,
+          "best_stat": "Throw",
+          "role": "Runner"
+        }
+      ]
+    }
+  ],
+  "current_week": 15,
+  "round_robin_num": 2
+}

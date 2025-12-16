@@ -75,26 +75,17 @@ SCENARIOS = [
 
 def load_gemini_api_key():
     """Load Gemini API key from .env file"""
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        api_key = os.getenv('GEMINI_API_KEY')
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables")
-        return api_key
-    except ImportError:
-        # Fallback to manual .env parsing if python-dotenv not available
-        env_path = os.path.join(os.path.dirname(__file__), '.env')
-        
-        if not os.path.exists(env_path):
-            raise FileNotFoundError(
-                ".env file not found. Please create a .env file with GEMINI_API_KEY=your_api_key"
-            )
-        
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    
+    # First, try to read directly from .env file to get the latest value
+    if os.path.exists(env_path):
         api_key = None
         with open(env_path, 'r') as f:
             for line in f:
                 line = line.strip()
+                # Skip comments and empty lines
+                if not line or line.startswith('#'):
+                    continue
                 if line.startswith('GEMINI_API_KEY='):
                     api_key = line.split('=', 1)[1].strip()
                     # Remove quotes if present
@@ -104,13 +95,35 @@ def load_gemini_api_key():
                         api_key = api_key[1:-1]
                     break
         
-        if not api_key:
-            raise ValueError(
-                "GEMINI_API_KEY not found in .env file. "
-                "Please add: GEMINI_API_KEY=your_api_key"
-            )
-        
-        return api_key
+        if api_key:
+            return api_key
+    
+    # Fallback to using dotenv with override=True to force reload
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(override=True)  # Force reload from .env file
+        api_key = os.getenv('GEMINI_API_KEY')
+        if api_key:
+            # Strip quotes and whitespace
+            api_key = api_key.strip()
+            if api_key.startswith('"') and api_key.endswith('"'):
+                api_key = api_key[1:-1]
+            elif api_key.startswith("'") and api_key.endswith("'"):
+                api_key = api_key[1:-1]
+            return api_key
+    except ImportError:
+        pass
+    
+    # If we get here, the key wasn't found
+    if not os.path.exists(env_path):
+        raise FileNotFoundError(
+            ".env file not found. Please create a .env file with GEMINI_API_KEY=your_api_key"
+        )
+    
+    raise ValueError(
+        "GEMINI_API_KEY not found in .env file. "
+        "Please add: GEMINI_API_KEY=your_api_key"
+    )
 
 
 def generate_random_prompt(winner_team_name, loser_team_name):

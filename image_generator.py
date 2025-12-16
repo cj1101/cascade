@@ -255,8 +255,8 @@ def apply_logo_to_rectangle(img, logo_image, rect_coords, opacity=0.18):
 def generate_game_image(game_result, filename, game_type="game", week=None, game_number=None):
     """Generate a game scoreboard image with team logos and scores - modern sports broadcast style"""
     try:
-        # Create square image (Instagram-friendly 1:1 aspect ratio)
-        width, height = 1600, 1600
+        # Create taller image to accommodate player scorecards
+        width, height = 1600, 2400
         
         # Get team scores early to determine winner for background theme
         team1 = game_result['team1']
@@ -335,6 +335,13 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
         stat_value_font = load_font(FONT_PATHS_BOLD, 48)
         vs_font = load_font(FONT_PATHS_BOLD, 48)
         legend_font = load_font(FONT_PATHS_REGULAR, 24)
+        player_name_font = load_font(FONT_PATHS_BOLD, 20)
+        player_stat_font = load_font(FONT_PATHS_REGULAR, 16)
+        player_label_font = load_font(FONT_PATHS_REGULAR, 14)
+        table_header_font = load_font(FONT_PATHS_BOLD, 28)
+        table_row_font = load_font(FONT_PATHS_REGULAR, 22)
+        table_stat_font = load_font(FONT_PATHS_REGULAR, 20)
+        team_name_font = load_font(FONT_PATHS_BOLD, 32)  # For team name in scoreboard header
         
         team1_detail = game_result['team1_detail']
         team2_detail = game_result['team2_detail']
@@ -462,6 +469,211 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             # Add a small label
             draw_text_with_shadow(draw, (loser_x + loser_logo_size//2, loser_y - 20), "Matchup", legend_font, anchor="ms")
             img.paste(loser_logo, (loser_x, loser_y), loser_logo)
+
+        # Player Stats Table Section - Two Side-by-Side Scoreboards
+        player_section_y = card_y + card_height + 50
+        table_bottom_margin = 60  # Space for legend at bottom
+        table_available_height = height - player_section_y - table_bottom_margin
+        
+        # Get player stats from game result
+        team1_player_stats = game_result.get('team1_player_stats', {})
+        team2_player_stats = game_result.get('team2_player_stats', {})
+        
+        # Separate players by team
+        team1_players = []
+        if hasattr(team1, 'players') and team1.players:
+            for player in team1.players:
+                player_name = player.get('name', 'Unknown')
+                player_stats = team1_player_stats.get(player_name, {})
+                team1_players.append({
+                    'player': player,
+                    'stats': player_stats
+                })
+        
+        team2_players = []
+        if hasattr(team2, 'players') and team2.players:
+            for player in team2.players:
+                player_name = player.get('name', 'Unknown')
+                player_stats = team2_player_stats.get(player_name, {})
+                team2_players.append({
+                    'player': player,
+                    'stats': player_stats
+                })
+        
+        # Sort players by ranking (1-7, best to worst)
+        team1_players.sort(key=lambda x: x['player'].get('ranking', 4))
+        team2_players.sort(key=lambda x: x['player'].get('ranking', 4))
+        
+        # Calculate dimensions for side-by-side tables
+        table_margin = 30
+        gap_between_tables = 20
+        table_width = (width - (table_margin * 2) - gap_between_tables) // 2
+        
+        # Calculate max players for row height calculation
+        max_players = max(len(team1_players), len(team2_players), 1)
+        header_height = 50
+        team_name_height = 40
+        row_height = min(45, (table_available_height - header_height - team_name_height) // max(1, max_players))
+        table_start_y = player_section_y
+        table_end_y = height - table_bottom_margin
+        
+        # Column widths for each table (smaller to fit side-by-side)
+        col_rank_width = 50
+        col_name_width = 140
+        col_stat_width = 80
+        
+        # Create overlay for stats tables
+        table_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        table_overlay_draw = ImageDraw.Draw(table_overlay)
+        
+        # Helper function to draw a team scoreboard
+        def draw_team_scoreboard(team_players, team_name, table_left_x, team_color=(78, 205, 196)):
+            """Draw a single team's scoreboard"""
+            table_right_x = table_left_x + table_width
+            
+            # Draw table background
+            table_bg_fill = (20, 30, 50, 220)
+            table_overlay_draw.rounded_rectangle(
+                [table_left_x, table_start_y, table_right_x, table_end_y],
+                radius=15, fill=table_bg_fill, outline=team_color, width=2
+            )
+            
+            # Draw team name header
+            team_name_y = table_start_y + 10
+            team_name_bg = (40, 50, 70, 255)
+            table_overlay_draw.rectangle(
+                [table_left_x + 5, team_name_y, table_right_x - 5, team_name_y + team_name_height],
+                fill=team_name_bg
+            )
+            draw_text_with_shadow(table_overlay_draw, 
+                                ((table_left_x + table_right_x) // 2, team_name_y + team_name_height // 2),
+                                team_name, team_name_font, fill='#ffffff', anchor="mm")
+            
+            # Draw header row
+            header_y = team_name_y + team_name_height + 5
+            header_bg = (40, 50, 70, 255)
+            table_overlay_draw.rectangle(
+                [table_left_x + 5, header_y, table_right_x - 5, header_y + header_height],
+                fill=header_bg
+            )
+            
+            # Header text positions
+            header_x_rank = table_left_x + 10
+            header_x_name = header_x_rank + col_rank_width
+            header_x_run = header_x_name + col_name_width
+            header_x_throw = header_x_run + col_stat_width
+            header_x_kick = header_x_throw + col_stat_width
+            
+            # Draw header labels
+            header_center_y = header_y + header_height // 2
+            draw_text_with_shadow(table_overlay_draw, (header_x_rank + col_rank_width // 2, header_center_y),
+                                "Rk", table_header_font, fill='#ffffff', anchor="mm")
+            draw_text_with_shadow(table_overlay_draw, (header_x_name + 5, header_center_y),
+                                "Name", table_header_font, fill='#ffffff', anchor="lm")
+            draw_text_with_shadow(table_overlay_draw, (header_x_run + col_stat_width // 2, header_center_y),
+                                "Run", table_header_font, fill='#ffffff', anchor="mm")
+            draw_text_with_shadow(table_overlay_draw, (header_x_throw + col_stat_width // 2, header_center_y),
+                                "Throw", table_header_font, fill='#ffffff', anchor="mm")
+            draw_text_with_shadow(table_overlay_draw, (header_x_kick + col_stat_width // 2, header_center_y),
+                                "Kick", table_header_font, fill='#ffffff', anchor="mm")
+            
+            # Draw player rows
+            current_y = header_y + header_height + 5
+            for i, player_data in enumerate(team_players):
+                player = player_data['player']
+                player_stats = player_data['stats']
+                
+                row_y = current_y
+                row_bottom = min(row_y + row_height, table_end_y - 5)
+                
+                # Check for cascade zones
+                cascade_runs = player_stats.get('cascade_runs', 0)
+                cascade_throws = player_stats.get('cascade_throws', 0)
+                cascade_kicks = player_stats.get('cascade_kicks', 0)
+                has_cascade = cascade_runs > 0 or cascade_throws > 0 or cascade_kicks > 0
+                
+                # Row background - highlight if cascade zones achieved
+                if has_cascade:
+                    row_bg = (60, 80, 100, 255)  # Highlighted background for cascade
+                    row_border = (255, 217, 61, 255)  # Gold border for cascade
+                else:
+                    row_bg = (30, 40, 60, 200) if i % 2 == 0 else (25, 35, 55, 200)  # Alternating
+                    row_border = None
+                
+                table_overlay_draw.rectangle(
+                    [table_left_x + 5, row_y, table_right_x - 5, row_bottom],
+                    fill=row_bg, outline=row_border, width=2 if has_cascade else 0
+                )
+                
+                # Get player data
+                ranking = player.get('ranking', 0)
+                player_name = player.get('name', 'Unknown')
+                runs_att = player_stats.get('runs_attempted', 0)
+                runs_comp = player_stats.get('runs_completed', 0)
+                throws_att = player_stats.get('throws_attempted', 0)
+                throws_comp = player_stats.get('throws_completed', 0)
+                kicks_att = player_stats.get('kicks_attempted', 0)
+                kicks_comp = player_stats.get('kicks_completed', 0)
+                
+                # Center text vertically in row
+                text_y = row_y + (row_bottom - row_y) // 2
+                
+                # Draw ranking
+                draw_text_with_shadow(table_overlay_draw, (header_x_rank + col_rank_width // 2, text_y),
+                                    f"#{ranking}", table_row_font, fill='#ffffff', anchor="mm")
+                
+                # Draw name (truncate if too long)
+                max_name_len = 15
+                display_name = player_name[:max_name_len] if len(player_name) <= max_name_len else player_name[:max_name_len-3] + "..."
+                draw_text_with_shadow(table_overlay_draw, (header_x_name + 5, text_y),
+                                    display_name, table_row_font, fill='#ffffff', anchor="lm")
+                
+                # Draw stat fractions (completions/attempts)
+                run_text = f"{runs_comp}/{runs_att}"
+                throw_text = f"{throws_comp}/{throws_att}"
+                kick_text = f"{kicks_comp}/{kicks_att}"
+                
+                # Color stats based on completion (teal for completed, white for attempted)
+                run_color = '#4ecdc4' if runs_comp > 0 else '#aaaaaa'
+                throw_color = '#4ecdc4' if throws_comp > 0 else '#aaaaaa'
+                kick_color = '#4ecdc4' if kicks_comp > 0 else '#aaaaaa'
+                
+                draw_text_with_shadow(table_overlay_draw, (header_x_run + col_stat_width // 2, text_y),
+                                    run_text, table_stat_font, fill=run_color, anchor="mm")
+                draw_text_with_shadow(table_overlay_draw, (header_x_throw + col_stat_width // 2, text_y),
+                                    throw_text, table_stat_font, fill=throw_color, anchor="mm")
+                draw_text_with_shadow(table_overlay_draw, (header_x_kick + col_stat_width // 2, text_y),
+                                    kick_text, table_stat_font, fill=kick_color, anchor="mm")
+                
+                # Draw cascade zone indicators
+                if has_cascade:
+                    cascade_x = table_right_x - 15
+                    cascade_indicators = []
+                    if cascade_runs > 0:
+                        cascade_indicators.append(f"R×{cascade_runs}")
+                    if cascade_throws > 0:
+                        cascade_indicators.append(f"T×{cascade_throws}")
+                    if cascade_kicks > 0:
+                        cascade_indicators.append(f"K×{cascade_kicks}")
+                    
+                    cascade_text = " ".join(cascade_indicators)
+                    draw_text_with_shadow(table_overlay_draw, (cascade_x, text_y),
+                                        cascade_text, table_row_font, fill='#ffd93d', anchor="rm")
+                
+                current_y = row_bottom + 2
+                if current_y >= table_end_y - 5:
+                    break
+        
+        # Draw Team 1 scoreboard on the left
+        team1_table_x = table_margin
+        draw_team_scoreboard(team1_players, team1.name, team1_table_x, team_color=(78, 205, 196))
+        
+        # Draw Team 2 scoreboard on the right
+        team2_table_x = table_margin + table_width + gap_between_tables
+        draw_team_scoreboard(team2_players, team2.name, team2_table_x, team_color=(255, 152, 0))
+        
+        # Paste table overlay
+        img.paste(table_overlay, (0, 0), table_overlay)
 
         # Legend
         legend_y = height - 40

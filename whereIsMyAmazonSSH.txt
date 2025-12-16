@@ -1,0 +1,16 @@
+Your identification has been saved in C:\Users\charl\.ssh\aws_cascade
+Your public key has been saved in C:\Users\charl\.ssh\aws_cascade.pub
+The key fingerprint is:
+SHA256:Ra5u+Rv1b2vK8OUlDDZ+7PlZTtaP0TZVzcG7dkWbdFo cascade-ec2
+The key's randomart image is:
++---[RSA 4096]----+
+|          .   .. |
+|         o     +E|
+|          o   .+O|
+|         o    .+o|
+|        S   =   +|
+|       . . + * ++|
+|        + ... OoX|
+|       . . .+oo%B|
+|          o. +***|
++----[SHA256]-----+

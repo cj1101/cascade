@@ -30,6 +30,7 @@ config.py
 
 # Environment variables
 .env
+.instagram_token_cache.json
 
 # IDE
 .vscode/

@@ -14,6 +14,7 @@ class Team:
         self.losses = 0
         self.points_for = 0
         self.points_against = 0
+        self.players = []  # List of player dictionaries with name, ranking, best_stat, role
 
     def __str__(self):
         return (f"{self.name} (Overall: {self.overall_advantage}, "
@@ -21,8 +22,52 @@ class Team:
                 f"Kick: {self.kick_advantage}, W-L: {self.wins}-{self.losses})")
 
     def best_stat(self):
-        stats = [("Run", self.run_advantage), ("Throw", self.throw_advantage), ("Kick", self.kick_advantage)]
-        return max(stats, key=lambda x: x[1])[0]
+        """Determine team's best stat from majority of players' best stats"""
+        if not self.players:
+            # Fallback to old method if no players
+            stats = [("Run", self.run_advantage), ("Throw", self.throw_advantage), ("Kick", self.kick_advantage)]
+            return max(stats, key=lambda x: x[1])[0]
+        
+        # Count player best stats
+        stat_counts = {"Run": 0, "Throw": 0, "Kick": 0}
+        for player in self.players:
+            best_stat = player.get('best_stat', 'Run')
+            if best_stat in stat_counts:
+                stat_counts[best_stat] += 1
+        
+        # Find majority
+        max_count = max(stat_counts.values())
+        majority_stats = [stat for stat, count in stat_counts.items() if count == max_count]
+        
+        # If there's a clear majority (more than half), return it
+        if len(majority_stats) == 1:
+            return majority_stats[0]
+        
+        # If tie, randomly select from tied stats
+        return random.choice(majority_stats)
+    
+    def get_player_strength_score(self):
+        """Calculate weighted average of player rankings (top players weighted more heavily)"""
+        if not self.players:
+            return 0.5  # Default neutral score
+        
+        total_weighted_score = 0.0
+        total_weight = 0.0
+        
+        for player in self.players:
+            ranking = player.get('ranking', 4)  # Default to middle if missing
+            # Weight: higher weight for better players (lower ranking number)
+            # Ranking 1 gets weight 7, ranking 7 gets weight 1
+            weight = 8 - ranking
+            # Score: convert ranking to 0-1 scale (1 = best = 1.0, 7 = worst = 0.0)
+            score = (8 - ranking) / 7.0
+            total_weighted_score += score * weight
+            total_weight += weight
+        
+        if total_weight == 0:
+            return 0.5
+        
+        return total_weighted_score / total_weight
     
     def get_logo_filename(self):
         """Convert team name to logo filename format"""
@@ -49,15 +94,15 @@ class ScoringDetail:
 def calculate_win_probability(team1, team2):
     """
     Calculate the probability that team1 wins against team2.
-    Factors in: advantage differences, point differential, and stat matchup bonuses.
+    Factors in: advantage differences, point differential, stat matchup bonuses, and player rankings.
     
     Returns: float between 0.25 and 0.75 (allowing meaningful upsets)
     """
     base_chance = 0.5
     
-    # 1. Base probability from advantage difference (reduced impact)
+    # 1. Base probability from advantage difference (reduced impact - halved)
     advantage_diff = team1.overall_advantage - team2.overall_advantage
-    team1_win_prob = base_chance + advantage_diff * 0.02  # Reduced from 0.05
+    team1_win_prob = base_chance + advantage_diff * 0.01  # Reduced from 0.02 to 0.01
     
     # 2. Add point differential adjustment
     if team1.points_for + team1.points_against > 0 and team2.points_for + team2.points_against > 0:
@@ -97,10 +142,147 @@ def calculate_win_probability(team1, team2):
     
     team1_win_prob += stat_matchup_bonus
     
+    # 4. Add player ranking factor (±3% based on average player strength difference)
+    team1_strength = team1.get_player_strength_score()
+    team2_strength = team2.get_player_strength_score()
+    strength_diff = team1_strength - team2_strength
+    # Normalize to ±3% range (strength_diff ranges from -1 to 1, so multiply by 0.03)
+    player_adjustment = strength_diff * 0.03
+    team1_win_prob += player_adjustment
+    
     # Cap between 25% and 75% to ensure meaningful upsets can occur
     team1_win_prob = max(0.25, min(0.75, team1_win_prob))
     
     return team1_win_prob
+
+
+def _select_player_by_ranking(team):
+    """Select a player from team based on ranking-weighted probability"""
+    if not team.players:
+        return None
+    
+    # Calculate weights: better ranked players (lower number) have higher weight
+    # Ranking 1 gets weight 7, ranking 7 gets weight 1
+    player_weights = [8 - player.get('ranking', 4) for player in team.players]
+    selected_player = random.choices(team.players, weights=player_weights)[0]
+    return selected_player
+
+
+def _select_stat_type_by_best_stat(player):
+    """Select stat type (run/throw/kick) based on player's best_stat with bias"""
+    best_stat = player.get('best_stat', 'Run')
+    
+    # Bias weights: best_stat gets higher weight
+    if best_stat == 'Run':
+        weights = [5, 2, 1]  # run:throw:kick
+    elif best_stat == 'Throw':
+        weights = [1, 5, 2]  # run:throw:kick
+    else:  # Kick
+        weights = [1, 2, 5]  # run:throw:kick
+    
+    stat_types = ['run', 'throw', 'kick']
+    return random.choices(stat_types, weights=weights)[0]
+
+
+def _process_scoring_opportunity(team, team_detail, team_score, team_player_stats):
+    """Process a single scoring opportunity for a team, tracking player stats"""
+    # Select player based on ranking
+    player = _select_player_by_ranking(team)
+    if not player:
+        # Fallback to old method if no players
+        team_weights = [
+            max(1, 3 + team.run_advantage),
+            max(1, 3 + team.throw_advantage),
+            max(1, 3 + team.kick_advantage)
+        ]
+        score_type = random.choices(['run', 'throw', 'kick'], weights=team_weights)[0]
+    else:
+        # Select stat type based on player's best_stat
+        score_type = _select_stat_type_by_best_stat(player)
+        player_name = player['name']
+        
+        # Initialize player stats if needed
+        if player_name not in team_player_stats:
+            team_player_stats[player_name] = {
+                'points': 0,
+                'runs_attempted': 0,
+                'runs_completed': 0,
+                'throws_attempted': 0,
+                'throws_completed': 0,
+                'kicks_attempted': 0,
+                'kicks_completed': 0,
+                'cascade_runs': 0,
+                'cascade_throws': 0,
+                'cascade_kicks': 0
+            }
+        
+        # Track attempt
+        if score_type == 'run':
+            team_player_stats[player_name]['runs_attempted'] += 1
+        elif score_type == 'throw':
+            team_player_stats[player_name]['throws_attempted'] += 1
+        else:  # kick
+            team_player_stats[player_name]['kicks_attempted'] += 1
+    
+    # Determine completion probability based on action type
+    # Run: ~30%, Throw: 45-50%, Kick: ~70%
+    completion_success = False
+    if score_type == 'run':
+        # Run completion: roughly 30% (use 0.30 with some variance)
+        completion_success = random.random() < 0.30
+    elif score_type == 'throw':
+        # Throw completion: 45-50% (use 0.475 average, random between 0.45-0.50)
+        throw_prob = random.uniform(0.45, 0.50)
+        completion_success = random.random() < throw_prob
+    else:  # kick
+        # Kick completion: ~70% (use 0.70)
+        completion_success = random.random() < 0.70
+    
+    # If attempt failed, return 0 points (attempt was already tracked)
+    if not completion_success:
+        return 0
+    
+    # Determine if scoring is successful (cascade chance) - only if completion succeeded
+    cascade = random.random() < 1/15  # Cascade zone chance
+    
+    # Calculate points
+    if score_type == 'run':
+        points = 3
+        team_detail.runs += 1
+        if cascade:
+            points *= 2
+            team_detail.cascade_runs += 1
+    elif score_type == 'throw':
+        points = 2
+        team_detail.throws += 1
+        if cascade:
+            points *= 2
+            team_detail.cascade_throws += 1
+    else:  # kick
+        points = 1
+        team_detail.kicks += 1
+        if cascade:
+            points *= 2
+            team_detail.cascade_kicks += 1
+    
+    # Track completion and points for player (only if attempt succeeded)
+    if player:
+        player_name = player['name']
+        if score_type == 'run':
+            team_player_stats[player_name]['runs_completed'] += 1
+            if cascade:
+                team_player_stats[player_name]['cascade_runs'] += 1
+        elif score_type == 'throw':
+            team_player_stats[player_name]['throws_completed'] += 1
+            if cascade:
+                team_player_stats[player_name]['cascade_throws'] += 1
+        else:  # kick
+            team_player_stats[player_name]['kicks_completed'] += 1
+            if cascade:
+                team_player_stats[player_name]['cascade_kicks'] += 1
+        team_player_stats[player_name]['points'] += points
+    
+    return points
 
 
 def play_game(team1, team2):
@@ -111,134 +293,36 @@ def play_game(team1, team2):
     team2_score = 0
     team1_detail = ScoringDetail()
     team2_detail = ScoringDetail()
+    
+    # Track player stats for each team
+    team1_player_stats = {}
+    team2_player_stats = {}
 
     for _ in range(20):  # 20 "scoring opportunities"
         if random.random() < team1_chance:
-            # Ensure weights are always positive (at least 1) to avoid ValueError
-            team1_weights = [
-                max(1, 3 + team1.run_advantage),
-                max(1, 3 + team1.throw_advantage),
-                max(1, 3 + team1.kick_advantage)
-            ]
-            score_type = random.choices(['run', 'throw', 'kick'], 
-                                        weights=team1_weights)[0]
-            cascade = random.random() < 1/15  # Cascade zone chance
-            if score_type == 'run':
-                points = 3
-                team1_detail.runs += 1
-                if cascade:
-                    points *= 2
-                    team1_detail.cascade_runs += 1
-            elif score_type == 'throw':
-                points = 2
-                team1_detail.throws += 1
-                if cascade:
-                    points *= 2
-                    team1_detail.cascade_throws += 1
-            else:
-                points = 1
-                team1_detail.kicks += 1
-                if cascade:
-                    points *= 2
-                    team1_detail.cascade_kicks += 1
+            points = _process_scoring_opportunity(team1, team1_detail, team1_score, team1_player_stats)
             team1_score += points
         else:
-            # Ensure weights are always positive (at least 1) to avoid ValueError
-            team2_weights = [
-                max(1, 3 + team2.run_advantage),
-                max(1, 3 + team2.throw_advantage),
-                max(1, 3 + team2.kick_advantage)
-            ]
-            score_type = random.choices(['run', 'throw', 'kick'], 
-                                        weights=team2_weights)[0]
-            cascade = random.random() < 1/15  # Cascade zone chance
-            if score_type == 'run':
-                points = 3
-                team2_detail.runs += 1
-                if cascade:
-                    points *= 2
-                    team2_detail.cascade_runs += 1
-            elif score_type == 'throw':
-                points = 2
-                team2_detail.throws += 1
-                if cascade:
-                    points *= 2
-                    team2_detail.cascade_throws += 1
-            else:
-                points = 1
-                team2_detail.kicks += 1
-                if cascade:
-                    points *= 2
-                    team2_detail.cascade_kicks += 1
+            points = _process_scoring_opportunity(team2, team2_detail, team2_score, team2_player_stats)
             team2_score += points
 
     # Handle ties with a tie-breaking scoring opportunity
     while team1_score == team2_score:
         if random.random() < team1_chance:
-            # Team 1 scores in tie-breaker
-            team1_weights = [
-                max(1, 3 + team1.run_advantage),
-                max(1, 3 + team1.throw_advantage),
-                max(1, 3 + team1.kick_advantage)
-            ]
-            score_type = random.choices(['run', 'throw', 'kick'], 
-                                        weights=team1_weights)[0]
-            cascade = random.random() < 1/15
-            if score_type == 'run':
-                points = 3
-                team1_detail.runs += 1
-                if cascade:
-                    points *= 2
-                    team1_detail.cascade_runs += 1
-            elif score_type == 'throw':
-                points = 2
-                team1_detail.throws += 1
-                if cascade:
-                    points *= 2
-                    team1_detail.cascade_throws += 1
-            else:
-                points = 1
-                team1_detail.kicks += 1
-                if cascade:
-                    points *= 2
-                    team1_detail.cascade_kicks += 1
+            points = _process_scoring_opportunity(team1, team1_detail, team1_score, team1_player_stats)
             team1_score += points
         else:
-            # Team 2 scores in tie-breaker
-            team2_weights = [
-                max(1, 3 + team2.run_advantage),
-                max(1, 3 + team2.throw_advantage),
-                max(1, 3 + team2.kick_advantage)
-            ]
-            score_type = random.choices(['run', 'throw', 'kick'], 
-                                        weights=team2_weights)[0]
-            cascade = random.random() < 1/15
-            if score_type == 'run':
-                points = 3
-                team2_detail.runs += 1
-                if cascade:
-                    points *= 2
-                    team2_detail.cascade_runs += 1
-            elif score_type == 'throw':
-                points = 2
-                team2_detail.throws += 1
-                if cascade:
-                    points *= 2
-                    team2_detail.cascade_throws += 1
-            else:
-                points = 1
-                team2_detail.kicks += 1
-                if cascade:
-                    points *= 2
-                    team2_detail.cascade_kicks += 1
+            points = _process_scoring_opportunity(team2, team2_detail, team2_score, team2_player_stats)
             team2_score += points
 
     if team1_score > team2_score:
         winner, loser = team1, team2
         winner_detail, loser_detail = team1_detail, team2_detail
+        winner_player_stats, loser_player_stats = team1_player_stats, team2_player_stats
     else:
         winner, loser = team2, team1
         winner_detail, loser_detail = team2_detail, team1_detail
+        winner_player_stats, loser_player_stats = team2_player_stats, team1_player_stats
 
     # Check for upset BEFORE updating advantages (upset = lower advantage team wins)
     upset = (winner.overall_advantage < loser.overall_advantage)
@@ -283,6 +367,8 @@ def play_game(team1, team2):
         'team2_score': team2_score,
         'team1_detail': team1_detail,
         'team2_detail': team2_detail,
+        'team1_player_stats': team1_player_stats,
+        'team2_player_stats': team2_player_stats,
         'upset': upset
     }
     
@@ -562,6 +648,9 @@ def calculate_standings_up_to_week(initial_teams, game_results_by_week, max_week
         temp_team.losses = 0
         temp_team.points_for = 0
         temp_team.points_against = 0
+        # Copy player data if available
+        if hasattr(team, 'players') and team.players:
+            temp_team.players = [player.copy() for player in team.players]
         temp_teams.append(temp_team)
         team_dict[team.name] = temp_team
     

@@ -1,0 +1,19 @@
+[Unit]
+Description=Cascade Game Simulation Auto-Start
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/cascade
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/ubuntu/cascade/venv/bin"
+ExecStart=/home/ubuntu/cascade/cascade_auto_start.sh
+StandardOutput=append:/var/log/cascade.log
+StandardError=append:/var/log/cascade.log
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+
