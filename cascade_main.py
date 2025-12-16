@@ -8,6 +8,7 @@ import instagram_poster
 import config
 import scheduler
 import os
+import webapp_bridge
 
 # Configure root logger to ensure output is visible
 logging.basicConfig(
@@ -116,6 +117,10 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     # (Round Robin 2 will use the saved current_week which should be 8)
     current_week = 1
     scheduler.logger.info("Round Robin 1: Starting at Week 1")
+
+    # Initialize Web App Season
+    season_id, season_folder = webapp_bridge.initialize_season()
+    scheduler.logger.info(f"Web App Season Initialized: ID={season_id}, Folder={season_folder}")
     
     # If in debug mode and Round Robin 1 is already complete, reset to start fresh
     if debug_interval is not None and round_robin_num == 1:
@@ -196,6 +201,13 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     # Generate full schedule for this round robin
     full_schedule = game_logic.generate_round_robin_schedule(teams)
     max_rounds = config.ROUNDS_PER_ROUND_ROBIN if config.ROUNDS_PER_ROUND_ROBIN else len(full_schedule)
+
+    # Upload Schedule to Web App
+    schedule_data = []
+    for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
+        week = current_week + week_offset
+        schedule_data.append((week, matches))
+    webapp_bridge.upload_schedule(season_id, schedule_data)
     
     # Track game results by week for standings calculation
     game_results_by_week = {}
@@ -283,6 +295,10 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
         
         # Store game results
         game_results_by_week[week] = week_game_results
+
+        # Sync data to Web App
+        scheduler.logger.info(f"Syncing Week {week} data to Web App...")
+        webapp_bridge.upload_game_data(season_id, week, week_game_results, season_folder)
         
         # Post to Instagram immediately after generating images for this week (if enabled)
         if enable_instagram:
@@ -384,6 +400,10 @@ def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=Tru
         sys.exit(1)
     
     scheduler.logger.info(f"Loaded game state: Week {current_week}")
+
+    # Initialize Web App Season (Assumption: This continues same season, but function checks active)
+    # We re-fetch active season info
+    season_id, season_folder = webapp_bridge.initialize_season()
     
     # Get initial teams for standings calculation (from saved state or recreate)
     initial_teams = []
@@ -405,6 +425,13 @@ def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=Tru
     # Generate full schedule for this round robin
     full_schedule = game_logic.generate_round_robin_schedule(teams)
     max_rounds = config.ROUNDS_PER_ROUND_ROBIN if config.ROUNDS_PER_ROUND_ROBIN else len(full_schedule)
+
+    # Upload Schedule to Web App (Append for RR2)
+    schedule_data = []
+    for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
+        week = current_week + week_offset
+        schedule_data.append((week, matches))
+    webapp_bridge.upload_schedule(season_id, schedule_data)
     
     # Track game results by week for standings calculation
     game_results_by_week = {}
@@ -481,6 +508,10 @@ def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=Tru
         
         # Store game results
         game_results_by_week[week] = week_game_results
+
+        # Sync data to Web App
+        scheduler.logger.info(f"Syncing Week {week} data to Web App...")
+        webapp_bridge.upload_game_data(season_id, week, week_game_results, season_folder)
         
         # Post to Instagram immediately after generating images for this week (if enabled)
         if enable_instagram:
@@ -582,6 +613,9 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         sys.exit(1)
     
     scheduler.logger.info(f"Loaded game state: Week {current_week}")
+
+    # Initialize Web App Season (fetch active)
+    season_id, season_folder = webapp_bridge.initialize_season()
     
     # Sort teams by wins, then by point difference
     sorted_teams = sorted(teams, key=lambda t: (t.wins, t.points_for - t.points_against), reverse=True)
@@ -620,6 +654,9 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
     quarterfinal_images = []
     quarterfinal_game_results = []
     
+    # Upload QF schedule logic could be here, but they are dynamic.
+    # webapp_bridge can handle creating games on the fly in upload_game_data if not found.
+
     for game_num, game in enumerate([
         (sorted_teams[0], sorted_teams[7]),
         (sorted_teams[1], sorted_teams[6]),
@@ -654,6 +691,11 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         # Track winner
         winner = game_result['team1'] if game_result['team1_score'] > game_result['team2_score'] else game_result['team2']
         quarterfinal_winners.append(winner)
+
+    # Sync QF data to Web App
+    scheduler.logger.info("Syncing Quarterfinals data to Web App...")
+    # Use a high week number for tournament rounds or handle specially. Let's say Week 90 = QF
+    webapp_bridge.upload_game_data(season_id, 90, quarterfinal_game_results, season_folder)
     
     # Post quarterfinals to Instagram (if enabled)
     if enable_instagram:
@@ -738,6 +780,10 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         # Track winner
         winner = game_result['team1'] if game_result['team1_score'] > game_result['team2_score'] else game_result['team2']
         semifinal_winners.append(winner)
+
+    # Sync SF data to Web App (Week 91)
+    scheduler.logger.info("Syncing Semifinals data to Web App...")
+    webapp_bridge.upload_game_data(season_id, 91, semifinal_game_results, season_folder)
     
     # Post semifinals to Instagram (if enabled)
     if enable_instagram:
@@ -830,6 +876,10 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         elif not enable_gemini_images:
             scheduler.logger.debug("Gemini image generation disabled - skipping")
         
+        # Sync Final Game data to Web App (Week 92)
+        scheduler.logger.info(f"Syncing Final Game {game_num} data to Web App...")
+        webapp_bridge.upload_game_data(season_id, 92, [(filename, game_result)], season_folder)
+
         # Post this final game to Instagram immediately (if enabled)
         if enable_instagram:
             scheduler.logger.info(f"\n{'='*60}")
@@ -901,6 +951,10 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
     for team in teams:
         scheduler.logger.info(f"{team}")
     
+    # Reset Season Tokens
+    scheduler.logger.info("Resetting user tokens for next season...")
+    webapp_bridge.reset_season_tokens()
+
     scheduler.logger.info("\nTournament complete!")
 
 
