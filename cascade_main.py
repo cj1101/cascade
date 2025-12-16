@@ -8,6 +8,7 @@ import instagram_poster
 import config
 import scheduler
 import os
+import webapp_bridge
 
 # Configure root logger to ensure output is visible
 logging.basicConfig(
@@ -33,6 +34,23 @@ except ImportError:
     PODCAST_AVAILABLE = False
     scheduler.logger.warning("Podcast generation not available. Install required packages (pdfplumber, gtts, pydub) to use it.")
 
+
+def validate_imports(enable_podcast=False, enable_gemini=False):
+    """
+    Validate that required modules are available based on enabled features.
+    Raises ImportError if a required feature is missing dependencies.
+    """
+    if enable_podcast and not PODCAST_AVAILABLE:
+        raise ImportError(
+            "Podcast generation is enabled but dependencies are missing. "
+            "Please install required packages (pdfplumber, gtts, pydub) or use --no-podcast."
+        )
+
+    if enable_gemini and not GEMINI_AVAILABLE:
+        raise ImportError(
+            "Gemini image generation is enabled but google-generativeai is missing. "
+            "Please install it or use --no-gemini."
+        )
 
 def format_game_results_for_caption(week_game_results):
     """
@@ -102,6 +120,9 @@ def format_game_results_for_caption(week_game_results):
 
 def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
     """Run first round robin (Friday 1pm EST)"""
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - ROUND ROBIN 1")
     if skip_wait:
@@ -116,6 +137,10 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     # (Round Robin 2 will use the saved current_week which should be 8)
     current_week = 1
     scheduler.logger.info("Round Robin 1: Starting at Week 1")
+
+    # Initialize Web App Season
+    season_id, season_folder = webapp_bridge.initialize_season()
+    scheduler.logger.info(f"Web App Season Initialized: ID={season_id}, Folder={season_folder}")
     
     # If in debug mode and Round Robin 1 is already complete, reset to start fresh
     if debug_interval is not None and round_robin_num == 1:
@@ -196,6 +221,13 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     # Generate full schedule for this round robin
     full_schedule = game_logic.generate_round_robin_schedule(teams)
     max_rounds = config.ROUNDS_PER_ROUND_ROBIN if config.ROUNDS_PER_ROUND_ROBIN else len(full_schedule)
+
+    # Upload Schedule to Web App
+    schedule_data = []
+    for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
+        week = current_week + week_offset
+        schedule_data.append((week, matches))
+    webapp_bridge.upload_schedule(season_id, schedule_data)
     
     # Track game results by week for standings calculation
     game_results_by_week = {}
@@ -283,6 +315,227 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
         
         # Store game results
         game_results_by_week[week] = week_game_results
+
+        # Sync data to Web App
+        scheduler.logger.info(f"Syncing Week {week} data to Web App...")
+        webapp_bridge.upload_game_data(season_id, week, week_game_results, season_folder)
+        
+        # Post to Instagram immediately after generating images for this week (if enabled)
+        if enable_instagram:
+            scheduler.logger.info(f"\n{'='*60}")
+            scheduler.logger.info(f"Posting Week {week} to Instagram...")
+            scheduler.logger.info(f"{'='*60}")
+            
+            # Generate caption with game results, standings and next week odds
+            caption_parts = [f"Week {week} Game Results"]
+            
+            # Add detailed game results
+            if week_game_results:
+                caption_parts.append("")
+                game_result_lines = format_game_results_for_caption(week_game_results)
+                caption_parts.extend(game_result_lines)
+            
+            # Add current standings (only up to current week)
+            if initial_teams and game_results_by_week:
+                caption_parts.append("")
+                caption_parts.append("Current Standings:")
+                standings = game_logic.calculate_standings_up_to_week(initial_teams, game_results_by_week, week)
+                caption_parts.append(standings)
+            
+            # Add odds for next week's matchups
+            next_week = week + 1
+            if upcoming_schedule and next_week in upcoming_schedule and teams:
+                caption_parts.append("")
+                caption_parts.append(f"Odds for Week {next_week}:")
+                matchups = upcoming_schedule[next_week]
+                for team1, team2 in matchups:
+                    odds1, odds2 = game_logic.calculate_matchup_odds(team1, team2)
+                    odds1_str = f"+{odds1}" if odds1 > 0 else str(odds1)
+                    odds2_str = f"+{odds2}" if odds2 > 0 else str(odds2)
+                    caption_parts.append(f"{team1.name} vs {team2.name}: {team1.name} {odds1_str}, {team2.name} {odds2_str}")
+            
+            caption = "\n".join(caption_parts)
+            
+            # Post all images for this week as a single carousel/gallery post
+            success = instagram_poster.post_to_instagram(week_image_files, caption)
+            if not success:
+                scheduler.logger.warning(f"Failed to post Week {week} images")
+                scheduler.logger.info("Continuing to next week automatically...")
+        else:
+            scheduler.logger.info(f"\nInstagram posting disabled - skipping Week {week} post")
+        
+        # Generate podcast for this week (if enabled)
+        if enable_podcast and PODCAST_AVAILABLE:
+            scheduler.logger.info(f"\n{'='*60}")
+            scheduler.logger.info(f"Generating podcast for Week {week}...")
+            scheduler.logger.info(f"{'='*60}")
+            try:
+                # Load rulebook text
+                rulebook_text = podcast_rulebook_reader.get_rulebook_text()
+                if not rulebook_text:
+                    scheduler.logger.warning("Could not load rulebook text. Podcast generation may be limited.")
+                
+                # Generate podcast
+                podcast_success = podcast_audio_generator.generate_week_podcast(
+                    game_results_by_week, week, rulebook_text
+                )
+                if podcast_success:
+                    scheduler.logger.info(f"Successfully generated podcast for Week {week}")
+                else:
+                    scheduler.logger.warning(f"Failed to generate podcast for Week {week}")
+            except Exception as e:
+                scheduler.logger.error(f"Error generating podcast for Week {week}: {e}")
+                scheduler.logger.info("Continuing to next week automatically...")
+        elif enable_podcast and not PODCAST_AVAILABLE:
+            # Should have failed validation, but just in case
+            scheduler.logger.error("Podcast generation enabled but modules not available")
+        elif not enable_podcast:
+            scheduler.logger.debug("Podcast generation disabled - skipping")
+    
+    # Update current week for next round robin
+    num_teams = len(teams)
+    weeks_per_round_robin = num_teams - 1 if num_teams % 2 == 0 else num_teams
+    new_current_week = current_week + weeks_per_round_robin
+    
+    # Save state after round robin 1
+    scheduler.save_game_state(teams, new_current_week, round_robin_num=1)
+    
+    scheduler.logger.info(f"\nFinal Standings after Round Robin 1:")
+    game_logic.display_standings(teams)
+    scheduler.logger.info("Round Robin 1 complete. State saved for Round Robin 2.")
+
+
+def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
+    """Run second round robin (Saturday 1pm EST)"""
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
+    scheduler.logger.info("="*60)
+    scheduler.logger.info("CASCADE GAME SIMULATION - ROUND ROBIN 2")
+    if skip_wait:
+        scheduler.logger.info("Running in IMMEDIATE mode (skipping schedule waits)")
+    scheduler.logger.info("="*60)
+    scheduler.logger.info(f"Feature toggles: Instagram={enable_instagram}, Gemini={enable_gemini_images}, Podcast={enable_podcast}, Wait={wait_seconds}s")
+    
+    # Load state from round robin 1
+    teams, current_week, _ = scheduler.load_game_state()
+    if teams is None:
+        scheduler.logger.error("No game state found! Round robin 1 must be run first.")
+        sys.exit(1)
+    
+    scheduler.logger.info(f"Loaded game state: Week {current_week}")
+
+    # Initialize Web App Season (Assumption: This continues same season, but function checks active)
+    # We re-fetch active season info
+    season_id, season_folder = webapp_bridge.initialize_season()
+    
+    # Get initial teams for standings calculation (from saved state or recreate)
+    initial_teams = []
+    for team in teams:
+        initial_team = game_logic.Team(team.name)
+        initial_team.overall_advantage = team.overall_advantage
+        initial_team.run_advantage = team.run_advantage
+        initial_team.throw_advantage = team.throw_advantage
+        initial_team.kick_advantage = team.kick_advantage
+        initial_team.wins = team.wins
+        initial_team.losses = team.losses
+        initial_team.points_for = team.points_for
+        initial_team.points_against = team.points_against
+        initial_teams.append(initial_team)
+    
+    # Get start hour from config
+    start_hour = getattr(config, 'ROUND_ROBIN_2_START_HOUR', 13)
+    
+    # Generate full schedule for this round robin
+    full_schedule = game_logic.generate_round_robin_schedule(teams)
+    max_rounds = config.ROUNDS_PER_ROUND_ROBIN if config.ROUNDS_PER_ROUND_ROBIN else len(full_schedule)
+
+    # Upload Schedule to Web App (Append for RR2)
+    schedule_data = []
+    for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
+        week = current_week + week_offset
+        schedule_data.append((week, matches))
+    webapp_bridge.upload_schedule(season_id, schedule_data)
+    
+    # Track game results by week for standings calculation
+    game_results_by_week = {}
+    # Track upcoming schedule for odds calculation
+    upcoming_schedule = {}
+    
+    # Process each week one at a time: generate and post on schedule
+    for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
+        week = current_week + week_offset
+        
+        # Calculate posting hour for this week
+        posting_hour = scheduler.calculate_next_posting_hour(start_hour, week_offset)
+        
+        # Wait until scheduled time
+        if wait_seconds is not None and week_offset == 0:
+            # Skip wait for first week in backend mode
+            pass
+        elif wait_seconds is not None:
+            # Backend mode: use wait_seconds (even if skip_wait is True)
+            import time
+            scheduler.logger.info(f"Waiting {wait_seconds} second(s) before Week {week}...")
+            time.sleep(wait_seconds)
+        elif skip_wait:
+            scheduler.logger.info(f"Skipping wait for {posting_hour:02d}:00 EST (IMMEDIATE mode)")
+        elif debug_interval:
+            scheduler.wait_for_interval(debug_interval)
+        elif not skip_wait:
+            scheduler.wait_until_hour(posting_hour)
+        
+        # Store upcoming matchups for odds calculation
+        if week_offset + 1 < len(full_schedule[:max_rounds]):
+            next_week = current_week + week_offset + 1
+            upcoming_schedule[next_week] = full_schedule[week_offset + 1]
+        
+        scheduler.logger.info(f"\nWeek {week} (Posting at {posting_hour:02d}:00 EST):")
+        week_image_files = []
+        week_game_results = []
+        upsets = []
+        
+        # Play games for this week
+        for game_num, (team1, team2) in enumerate(matches, 1):
+            result, upset, game_result = game_logic.play_game(team1, team2)
+            scheduler.logger.info(result)
+            
+            if upset:
+                upsets.append(f"{team2.name} (adv: {team2.overall_advantage}) upset {team1.name} (adv: {team1.overall_advantage})")
+            
+            # Generate scoreboard image
+            filename = f"week_{week}_game_{game_num}.png"
+            image_generator.generate_game_image(game_result, filename, game_type="game", week=week)
+            week_image_files.append(filename)
+            week_game_results.append((filename, game_result))
+            
+            # Generate Gemini artistic photo (if enabled)
+            if enable_gemini_images and config.USE_GEMINI and GEMINI_AVAILABLE:
+                gemini_filename = f"week_{week}_game_{game_num}_gemini.png"
+                success = gemini_image_generator.generate_game_image_with_gemini(
+                    game_result, gemini_filename, game_type="game", week=week, is_champion=False
+                )
+                if success:
+                    week_image_files.append(gemini_filename)
+                else:
+                    scheduler.logger.warning(f"Gemini artistic photo generation failed for {gemini_filename}")
+            elif not enable_gemini_images:
+                scheduler.logger.debug("Gemini image generation disabled - skipping")
+        
+        if upsets:
+            scheduler.logger.info("\nUpsets this week:")
+            for upset in upsets:
+                scheduler.logger.info(upset)
+        
+        scheduler.logger.info("\nCurrent Standings:")
+        game_logic.display_standings(teams)
+        
+        # Store game results
+        game_results_by_week[week] = week_game_results
+
+        # Sync data to Web App
+        scheduler.logger.info(f"Syncing Week {week} data to Web App...")
+        webapp_bridge.upload_game_data(season_id, week, week_game_results, season_folder)
         
         # Post to Instagram immediately after generating images for this week (if enabled)
         if enable_instagram:
@@ -360,204 +613,6 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     weeks_per_round_robin = num_teams - 1 if num_teams % 2 == 0 else num_teams
     new_current_week = current_week + weeks_per_round_robin
     
-    # Save state after round robin 1
-    scheduler.save_game_state(teams, new_current_week, round_robin_num=1)
-    
-    scheduler.logger.info(f"\nFinal Standings after Round Robin 1:")
-    game_logic.display_standings(teams)
-    scheduler.logger.info("Round Robin 1 complete. State saved for Round Robin 2.")
-
-
-def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
-    """Run second round robin (Saturday 1pm EST)"""
-    scheduler.logger.info("="*60)
-    scheduler.logger.info("CASCADE GAME SIMULATION - ROUND ROBIN 2")
-    if skip_wait:
-        scheduler.logger.info("Running in IMMEDIATE mode (skipping schedule waits)")
-    scheduler.logger.info("="*60)
-    scheduler.logger.info(f"Feature toggles: Instagram={enable_instagram}, Gemini={enable_gemini_images}, Podcast={enable_podcast}, Wait={wait_seconds}s")
-    
-    # Load state from round robin 1
-    teams, current_week, _ = scheduler.load_game_state()
-    if teams is None:
-        scheduler.logger.error("No game state found! Round robin 1 must be run first.")
-        sys.exit(1)
-    
-    scheduler.logger.info(f"Loaded game state: Week {current_week}")
-    
-    # Get initial teams for standings calculation (from saved state or recreate)
-    initial_teams = []
-    for team in teams:
-        initial_team = game_logic.Team(team.name)
-        initial_team.overall_advantage = team.overall_advantage
-        initial_team.run_advantage = team.run_advantage
-        initial_team.throw_advantage = team.throw_advantage
-        initial_team.kick_advantage = team.kick_advantage
-        initial_team.wins = team.wins
-        initial_team.losses = team.losses
-        initial_team.points_for = team.points_for
-        initial_team.points_against = team.points_against
-        initial_teams.append(initial_team)
-    
-    # Get start hour from config
-    start_hour = getattr(config, 'ROUND_ROBIN_2_START_HOUR', 13)
-    
-    # Generate full schedule for this round robin
-    full_schedule = game_logic.generate_round_robin_schedule(teams)
-    max_rounds = config.ROUNDS_PER_ROUND_ROBIN if config.ROUNDS_PER_ROUND_ROBIN else len(full_schedule)
-    
-    # Track game results by week for standings calculation
-    game_results_by_week = {}
-    # Track upcoming schedule for odds calculation
-    upcoming_schedule = {}
-    
-    # Process each week one at a time: generate and post on schedule
-    for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
-        week = current_week + week_offset
-        
-        # Calculate posting hour for this week
-        posting_hour = scheduler.calculate_next_posting_hour(start_hour, week_offset)
-        
-        # Wait until scheduled time
-        if wait_seconds is not None and week_offset == 0:
-            # Skip wait for first week in backend mode
-            pass
-        elif wait_seconds is not None:
-            # Backend mode: use wait_seconds (even if skip_wait is True)
-            import time
-            scheduler.logger.info(f"Waiting {wait_seconds} second(s) before Week {week}...")
-            time.sleep(wait_seconds)
-        elif skip_wait:
-            scheduler.logger.info(f"Skipping wait for {posting_hour:02d}:00 EST (IMMEDIATE mode)")
-        elif debug_interval:
-            scheduler.wait_for_interval(debug_interval)
-        elif not skip_wait:
-            scheduler.wait_until_hour(posting_hour)
-        
-        # Store upcoming matchups for odds calculation
-        if week_offset + 1 < len(full_schedule[:max_rounds]):
-            next_week = current_week + week_offset + 1
-            upcoming_schedule[next_week] = full_schedule[week_offset + 1]
-        
-        scheduler.logger.info(f"\nWeek {week} (Posting at {posting_hour:02d}:00 EST):")
-        week_image_files = []
-        week_game_results = []
-        upsets = []
-        
-        # Play games for this week
-        for game_num, (team1, team2) in enumerate(matches, 1):
-            result, upset, game_result = game_logic.play_game(team1, team2)
-            scheduler.logger.info(result)
-            
-            if upset:
-                upsets.append(f"{team2.name} (adv: {team2.overall_advantage}) upset {team1.name} (adv: {team1.overall_advantage})")
-            
-            # Generate scoreboard image
-            filename = f"week_{week}_game_{game_num}.png"
-            image_generator.generate_game_image(game_result, filename, game_type="game", week=week)
-            week_image_files.append(filename)
-            week_game_results.append((filename, game_result))
-            
-            # Generate Gemini artistic photo (if enabled)
-            if enable_gemini_images and config.USE_GEMINI and GEMINI_AVAILABLE:
-                gemini_filename = f"week_{week}_game_{game_num}_gemini.png"
-                success = gemini_image_generator.generate_game_image_with_gemini(
-                    game_result, gemini_filename, game_type="game", week=week, is_champion=False
-                )
-                if success:
-                    week_image_files.append(gemini_filename)
-                else:
-                    scheduler.logger.warning(f"Gemini artistic photo generation failed for {gemini_filename}")
-            elif not enable_gemini_images:
-                scheduler.logger.debug("Gemini image generation disabled - skipping")
-        
-        if upsets:
-            scheduler.logger.info("\nUpsets this week:")
-            for upset in upsets:
-                scheduler.logger.info(upset)
-        
-        scheduler.logger.info("\nCurrent Standings:")
-        game_logic.display_standings(teams)
-        
-        # Store game results
-        game_results_by_week[week] = week_game_results
-        
-        # Post to Instagram immediately after generating images for this week (if enabled)
-        if enable_instagram:
-            scheduler.logger.info(f"\n{'='*60}")
-            scheduler.logger.info(f"Posting Week {week} to Instagram...")
-            scheduler.logger.info(f"{'='*60}")
-            
-            # Generate caption with game results, standings and next week odds
-            caption_parts = [f"Week {week} Game Results"]
-            
-            # Add detailed game results
-            if week_game_results:
-                caption_parts.append("")
-                game_result_lines = format_game_results_for_caption(week_game_results)
-                caption_parts.extend(game_result_lines)
-            
-            # Add current standings (only up to current week)
-            if initial_teams and game_results_by_week:
-                caption_parts.append("")
-                caption_parts.append("Current Standings:")
-                standings = game_logic.calculate_standings_up_to_week(initial_teams, game_results_by_week, week)
-                caption_parts.append(standings)
-            
-            # Add odds for next week's matchups
-            next_week = week + 1
-            if upcoming_schedule and next_week in upcoming_schedule and teams:
-                caption_parts.append("")
-                caption_parts.append(f"Odds for Week {next_week}:")
-                matchups = upcoming_schedule[next_week]
-                for team1, team2 in matchups:
-                    odds1, odds2 = game_logic.calculate_matchup_odds(team1, team2)
-                    odds1_str = f"+{odds1}" if odds1 > 0 else str(odds1)
-                    odds2_str = f"+{odds2}" if odds2 > 0 else str(odds2)
-                    caption_parts.append(f"{team1.name} vs {team2.name}: {team1.name} {odds1_str}, {team2.name} {odds2_str}")
-            
-            caption = "\n".join(caption_parts)
-            
-            # Post all images for this week as a single carousel/gallery post
-            success = instagram_poster.post_to_instagram(week_image_files, caption)
-            if not success:
-                scheduler.logger.warning(f"Failed to post Week {week} images")
-                scheduler.logger.info("Continuing to next week automatically...")
-        else:
-            scheduler.logger.info(f"\nInstagram posting disabled - skipping Week {week} post")
-        
-        # Generate podcast for this week (if enabled)
-        if enable_podcast and PODCAST_AVAILABLE:
-            scheduler.logger.info(f"\n{'='*60}")
-            scheduler.logger.info(f"Generating podcast for Week {week}...")
-            scheduler.logger.info(f"{'='*60}")
-            try:
-                # Load rulebook text
-                rulebook_text = podcast_rulebook_reader.get_rulebook_text()
-                if not rulebook_text:
-                    scheduler.logger.warning("Could not load rulebook text. Podcast generation may be limited.")
-                
-                # Generate podcast
-                podcast_success = podcast_audio_generator.generate_week_podcast(
-                    game_results_by_week, week, rulebook_text
-                )
-                if podcast_success:
-                    scheduler.logger.info(f"Successfully generated podcast for Week {week}")
-                else:
-                    scheduler.logger.warning(f"Failed to generate podcast for Week {week}")
-            except Exception as e:
-                scheduler.logger.error(f"Error generating podcast for Week {week}: {e}")
-                scheduler.logger.info("Continuing to next week automatically...")
-        elif enable_podcast and not PODCAST_AVAILABLE:
-            scheduler.logger.info("Podcast generation skipped (modules not available)")
-        elif not enable_podcast:
-            scheduler.logger.debug("Podcast generation disabled - skipping")
-    
-    # Update current week for tournament
-    num_teams = len(teams)
-    weeks_per_round_robin = num_teams - 1 if num_teams % 2 == 0 else num_teams
-    new_current_week = current_week + weeks_per_round_robin
-    
     # Save state after round robin 2
     scheduler.save_game_state(teams, new_current_week, round_robin_num=2)
     
@@ -568,6 +623,9 @@ def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=Tru
 
 def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
     """Run tournament (Sunday 6pm/7pm/8pm EST)"""
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - TOURNAMENT")
     if skip_wait:
@@ -582,6 +640,9 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         sys.exit(1)
     
     scheduler.logger.info(f"Loaded game state: Week {current_week}")
+
+    # Initialize Web App Season (fetch active)
+    season_id, season_folder = webapp_bridge.initialize_season()
     
     # Sort teams by wins, then by point difference
     sorted_teams = sorted(teams, key=lambda t: (t.wins, t.points_for - t.points_against), reverse=True)
@@ -620,6 +681,9 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
     quarterfinal_images = []
     quarterfinal_game_results = []
     
+    # Upload QF schedule logic could be here, but they are dynamic.
+    # webapp_bridge can handle creating games on the fly in upload_game_data if not found.
+
     for game_num, game in enumerate([
         (sorted_teams[0], sorted_teams[7]),
         (sorted_teams[1], sorted_teams[6]),
@@ -654,6 +718,11 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         # Track winner
         winner = game_result['team1'] if game_result['team1_score'] > game_result['team2_score'] else game_result['team2']
         quarterfinal_winners.append(winner)
+
+    # Sync QF data to Web App
+    scheduler.logger.info("Syncing Quarterfinals data to Web App...")
+    # Use a high week number for tournament rounds or handle specially. Let's say Week 90 = QF
+    webapp_bridge.upload_game_data(season_id, 90, quarterfinal_game_results, season_folder)
     
     # Post quarterfinals to Instagram (if enabled)
     if enable_instagram:
@@ -738,6 +807,10 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         # Track winner
         winner = game_result['team1'] if game_result['team1_score'] > game_result['team2_score'] else game_result['team2']
         semifinal_winners.append(winner)
+
+    # Sync SF data to Web App (Week 91)
+    scheduler.logger.info("Syncing Semifinals data to Web App...")
+    webapp_bridge.upload_game_data(season_id, 91, semifinal_game_results, season_folder)
     
     # Post semifinals to Instagram (if enabled)
     if enable_instagram:
@@ -830,6 +903,10 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
         elif not enable_gemini_images:
             scheduler.logger.debug("Gemini image generation disabled - skipping")
         
+        # Sync Final Game data to Web App (Week 92)
+        scheduler.logger.info(f"Syncing Final Game {game_num} data to Web App...")
+        webapp_bridge.upload_game_data(season_id, 92, [(filename, game_result)], season_folder)
+
         # Post this final game to Instagram immediately (if enabled)
         if enable_instagram:
             scheduler.logger.info(f"\n{'='*60}")
@@ -901,6 +978,10 @@ def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, 
     for team in teams:
         scheduler.logger.info(f"{team}")
     
+    # Reset Season Tokens
+    scheduler.logger.info("Resetting user tokens for next season...")
+    webapp_bridge.reset_season_tokens()
+
     scheduler.logger.info("\nTournament complete!")
 
 
@@ -914,6 +995,9 @@ def run_backend(enable_instagram=True, enable_gemini_images=True, enable_podcast
         enable_podcast: Boolean to enable/disable podcast generation
         wait_seconds: Integer for seconds to wait between weeks (default: 10)
     """
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - BACKEND MODE")
     scheduler.logger.info("="*60)
@@ -1013,11 +1097,24 @@ def main():
         )
     # Individual phase modes
     elif args.mode == 'round_robin_1':
-        run_round_robin_1(skip_wait=args.now, debug_interval=args.debug_interval)
+        # Default flags for individual modes (can be overridden if we added args for them)
+        run_round_robin_1(
+            skip_wait=args.now,
+            debug_interval=args.debug_interval,
+            enable_podcast=not args.no_podcast if hasattr(args, 'no_podcast') else True # Default to True
+        )
     elif args.mode == 'round_robin_2':
-        run_round_robin_2(skip_wait=args.now, debug_interval=args.debug_interval)
+        run_round_robin_2(
+            skip_wait=args.now,
+            debug_interval=args.debug_interval,
+            enable_podcast=not args.no_podcast if hasattr(args, 'no_podcast') else True
+        )
     elif args.mode == 'tournament':
-        run_tournament(skip_wait=args.now, debug_interval=args.debug_interval)
+        run_tournament(
+            skip_wait=args.now,
+            debug_interval=args.debug_interval,
+            enable_podcast=not args.no_podcast if hasattr(args, 'no_podcast') else True
+        )
     else:
         parser.error(f"Invalid mode: {args.mode}")
 
