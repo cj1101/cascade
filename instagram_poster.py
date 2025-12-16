@@ -893,14 +893,9 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None,
         next_week = week + 1
         if upcoming_schedule and next_week in upcoming_schedule and teams:
             caption_parts.append("")
-            caption_parts.append(f"Odds for Week {next_week}:")
-            matchups = upcoming_schedule[next_week]
-            for team1, team2 in matchups:
-                odds1, odds2 = game_logic.calculate_matchup_odds(team1, team2)
-                # Format odds with + sign for positive, no sign for negative
-                odds1_str = f"+{odds1}" if odds1 > 0 else str(odds1)
-                odds2_str = f"+{odds2}" if odds2 > 0 else str(odds2)
-                caption_parts.append(f"{team1.name} vs {team2.name}: {team1.name} {odds1_str}, {team2.name} {odds2_str}")
+            # Use the new detailed betting lines
+            betting_lines = game_logic.format_betting_slip(upcoming_schedule[next_week])
+            caption_parts.append(betting_lines)
         
         caption = "\n".join(caption_parts)
         

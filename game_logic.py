@@ -285,7 +285,11 @@ def _process_scoring_opportunity(team, team_detail, team_score, team_player_stat
     return points
 
 
-def play_game(team1, team2):
+def simulate_game_session(team1, team2):
+    """
+    Simulates a single game session without modifying team states.
+    Returns scores, details, and stats.
+    """
     # Use the comprehensive win probability calculation
     team1_chance = calculate_win_probability(team1, team2)
 
@@ -314,6 +318,16 @@ def play_game(team1, team2):
         else:
             points = _process_scoring_opportunity(team2, team2_detail, team2_score, team2_player_stats)
             team2_score += points
+
+    return team1_score, team2_score, team1_detail, team2_detail, team1_player_stats, team2_player_stats
+
+
+def play_game(team1, team2):
+    """
+    Plays a game, updates team stats, and returns results.
+    """
+    # Run the simulation
+    team1_score, team2_score, team1_detail, team2_detail, team1_player_stats, team2_player_stats = simulate_game_session(team1, team2)
 
     if team1_score > team2_score:
         winner, loser = team1, team2
@@ -489,6 +503,151 @@ def calculate_matchup_odds(team1, team2):
     team2_odds = probability_to_american_odds(team2_win_prob)
     
     return team1_odds, team2_odds
+
+
+def generate_betting_lines(team1, team2, num_simulations=1000):
+    """
+    Simulates upcoming matchup to generate Spread, Total, Moneyline, and Prop Bets.
+    Returns a dictionary with all betting info.
+    """
+
+    # 1. Run Simulations
+    sim_results = []
+
+    team1_wins = 0
+    total_points = 0
+    margin_diff_sum = 0 # (Team1 Score - Team2 Score)
+
+    # Prop tracking
+    cascade_count = 0
+    run_score_count = 0
+    throw_score_count = 0
+    kick_score_count = 0
+
+    team1_total_score = 0
+    team2_total_score = 0
+
+    for _ in range(num_simulations):
+        s1, s2, d1, d2, _, _ = simulate_game_session(team1, team2)
+
+        if s1 > s2:
+            team1_wins += 1
+
+        total = s1 + s2
+        margin = s1 - s2
+
+        total_points += total
+        margin_diff_sum += margin
+        team1_total_score += s1
+        team2_total_score += s2
+
+        # Props
+        if (d1.cascade_runs + d1.cascade_throws + d1.cascade_kicks +
+            d2.cascade_runs + d2.cascade_throws + d2.cascade_kicks) > 0:
+            cascade_count += 1
+
+        # Count total scores by type for frequency prop
+        run_score_count += d1.runs + d2.runs
+        throw_score_count += d1.throws + d2.throws
+        kick_score_count += d1.kicks + d2.kicks
+
+    # 2. Calculate Lines
+
+    # Moneyline
+    win_prob = team1_wins / num_simulations
+    ml1 = probability_to_american_odds(win_prob)
+    ml2 = probability_to_american_odds(1.0 - win_prob)
+
+    # Spread (Standard Vegas rounding to .5)
+    avg_margin = margin_diff_sum / num_simulations
+    # If avg_margin is positive, Team 1 is favored by that much (e.g. -5.5)
+    # We round to nearest 0.5
+    spread_value = round(abs(avg_margin) * 2) / 2
+    if spread_value == 0:
+        spread_value = 0.5 # Pick 'em usually handled as small spread or PK. Let's force a small line.
+
+    if avg_margin > 0:
+        favorite = team1
+        underdog = team2
+        spread_str = f"{team1.name} -{spread_value}"
+        spread_fav_odds = -110
+        spread_dog_odds = -110
+    else:
+        favorite = team2
+        underdog = team1
+        spread_str = f"{team2.name} -{spread_value}"
+        spread_fav_odds = -110
+        spread_dog_odds = -110
+
+    # Total (Over/Under)
+    avg_total = total_points / num_simulations
+    total_line = round(avg_total * 2) / 2
+
+    # Team Totals
+    avg_t1 = round((team1_total_score / num_simulations) * 2) / 2
+    avg_t2 = round((team2_total_score / num_simulations) * 2) / 2
+
+    # 3. Props
+
+    # Cascade Odds
+    cascade_prob = cascade_count / num_simulations
+    cascade_yes = probability_to_american_odds(cascade_prob)
+
+    # Most Common Score Method
+    score_counts = {'Run': run_score_count, 'Throw': throw_score_count, 'Kick': kick_score_count}
+    most_common_method = max(score_counts, key=score_counts.get)
+
+    return {
+        'moneyline': (ml1, ml2),
+        'spread_str': spread_str,
+        'spread_value': spread_value,
+        'favorite': favorite,
+        'underdog': underdog,
+        'total': total_line,
+        'team1_total': avg_t1,
+        'team2_total': avg_t2,
+        'cascade_yes_odds': cascade_yes,
+        'most_common_method': most_common_method
+    }
+
+def format_betting_slip(matchups):
+    """
+    Formats a list of matchups into a Vegas-style betting slip string.
+    matchups: List of (team1, team2) tuples.
+    """
+    lines = []
+    lines.append("🎰 OFFICIAL WEEKLY BETTING LINES 🎰")
+    lines.append(" odds by Cascade Sportsbook")
+    lines.append("")
+
+    for team1, team2 in matchups:
+        data = generate_betting_lines(team1, team2)
+
+        lines.append(f"⚔️ {team1.name.upper()} vs {team2.name.upper()}")
+
+        # Moneyline
+        ml1 = f"+{data['moneyline'][0]}" if data['moneyline'][0] > 0 else str(data['moneyline'][0])
+        ml2 = f"+{data['moneyline'][1]}" if data['moneyline'][1] > 0 else str(data['moneyline'][1])
+        lines.append(f"   MONEYLINE: {team1.name} {ml1}  |  {team2.name} {ml2}")
+
+        # Spread
+        lines.append(f"   SPREAD: {data['spread_str']} (-110)")
+
+        # Total
+        lines.append(f"   TOTAL: {data['total']} (O/U -110)")
+
+        # Props Section
+        lines.append("   🎲 PROPS:")
+        lines.append(f"     • {team1.name} Team Total: {data['team1_total']} (O/U -110)")
+        lines.append(f"     • {team2.name} Team Total: {data['team2_total']} (O/U -110)")
+
+        cascade_odds = f"+{data['cascade_yes_odds']}" if data['cascade_yes_odds'] > 0 else str(data['cascade_yes_odds'])
+        lines.append(f"     • Will there be a Cascade? YES {cascade_odds}")
+        lines.append(f"     • Most Frequent Score Type: {data['most_common_method']}")
+
+        lines.append("") # Spacer
+
+    return "\n".join(lines)
 
 
 def calculate_team_odds(teams):
