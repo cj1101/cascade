@@ -34,6 +34,23 @@ except ImportError:
     scheduler.logger.warning("Podcast generation not available. Install required packages (pdfplumber, gtts, pydub) to use it.")
 
 
+def validate_imports(enable_podcast=False, enable_gemini=False):
+    """
+    Validate that required modules are available based on enabled features.
+    Raises ImportError if a required feature is missing dependencies.
+    """
+    if enable_podcast and not PODCAST_AVAILABLE:
+        raise ImportError(
+            "Podcast generation is enabled but dependencies are missing. "
+            "Please install required packages (pdfplumber, gtts, pydub) or use --no-podcast."
+        )
+
+    if enable_gemini and not GEMINI_AVAILABLE:
+        raise ImportError(
+            "Gemini image generation is enabled but google-generativeai is missing. "
+            "Please install it or use --no-gemini."
+        )
+
 def format_game_results_for_caption(week_game_results):
     """
     Format game results for Instagram caption.
@@ -102,6 +119,9 @@ def format_game_results_for_caption(week_game_results):
 
 def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
     """Run first round robin (Friday 1pm EST)"""
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - ROUND ROBIN 1")
     if skip_wait:
@@ -351,7 +371,8 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
                 scheduler.logger.error(f"Error generating podcast for Week {week}: {e}")
                 scheduler.logger.info("Continuing to next week automatically...")
         elif enable_podcast and not PODCAST_AVAILABLE:
-            scheduler.logger.info("Podcast generation skipped (modules not available)")
+            # Should have failed validation, but just in case
+            scheduler.logger.error("Podcast generation enabled but modules not available")
         elif not enable_podcast:
             scheduler.logger.debug("Podcast generation disabled - skipping")
     
@@ -370,6 +391,9 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
 
 def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
     """Run second round robin (Saturday 1pm EST)"""
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - ROUND ROBIN 2")
     if skip_wait:
@@ -553,7 +577,7 @@ def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=Tru
         elif not enable_podcast:
             scheduler.logger.debug("Podcast generation disabled - skipping")
     
-    # Update current week for tournament
+    # Update current week for next round robin
     num_teams = len(teams)
     weeks_per_round_robin = num_teams - 1 if num_teams % 2 == 0 else num_teams
     new_current_week = current_week + weeks_per_round_robin
@@ -568,6 +592,9 @@ def run_round_robin_2(skip_wait=False, debug_interval=None, enable_instagram=Tru
 
 def run_tournament(skip_wait=False, debug_interval=None, enable_instagram=True, enable_gemini_images=True, enable_podcast=False, wait_seconds=10):
     """Run tournament (Sunday 6pm/7pm/8pm EST)"""
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - TOURNAMENT")
     if skip_wait:
@@ -914,6 +941,9 @@ def run_backend(enable_instagram=True, enable_gemini_images=True, enable_podcast
         enable_podcast: Boolean to enable/disable podcast generation
         wait_seconds: Integer for seconds to wait between weeks (default: 10)
     """
+    # Validate imports before starting
+    validate_imports(enable_podcast=enable_podcast, enable_gemini=enable_gemini_images)
+
     scheduler.logger.info("="*60)
     scheduler.logger.info("CASCADE GAME SIMULATION - BACKEND MODE")
     scheduler.logger.info("="*60)
@@ -1013,11 +1043,24 @@ def main():
         )
     # Individual phase modes
     elif args.mode == 'round_robin_1':
-        run_round_robin_1(skip_wait=args.now, debug_interval=args.debug_interval)
+        # Default flags for individual modes (can be overridden if we added args for them)
+        run_round_robin_1(
+            skip_wait=args.now,
+            debug_interval=args.debug_interval,
+            enable_podcast=not args.no_podcast if hasattr(args, 'no_podcast') else True # Default to True
+        )
     elif args.mode == 'round_robin_2':
-        run_round_robin_2(skip_wait=args.now, debug_interval=args.debug_interval)
+        run_round_robin_2(
+            skip_wait=args.now,
+            debug_interval=args.debug_interval,
+            enable_podcast=not args.no_podcast if hasattr(args, 'no_podcast') else True
+        )
     elif args.mode == 'tournament':
-        run_tournament(skip_wait=args.now, debug_interval=args.debug_interval)
+        run_tournament(
+            skip_wait=args.now,
+            debug_interval=args.debug_interval,
+            enable_podcast=not args.no_podcast if hasattr(args, 'no_podcast') else True
+        )
     else:
         parser.error(f"Invalid mode: {args.mode}")
 
