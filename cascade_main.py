@@ -520,7 +520,14 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     # Get start time from config (defaults to 1:00 PM EST)
     start_hour = getattr(config, 'ROUND_ROBIN_1_START_HOUR', 13)
     start_minute = getattr(config, 'ROUND_ROBIN_1_START_MINUTE', 0)
-    first_match_datetime = scheduler.get_next_fourth_weekend_friday_datetime(start_hour, start_minute)
+    
+    # Calculate "tomorrow" at start_hour in EST/EDT (instead of using last Friday of month)
+    from datetime import datetime, timedelta
+    import pytz
+    est = pytz.timezone('US/Eastern')
+    now = datetime.now(est)
+    tomorrow = now + timedelta(days=1)
+    first_match_datetime = est.localize(datetime(tomorrow.year, tomorrow.month, tomorrow.day, start_hour, start_minute))
     
     # Generate full schedule for this round robin
     full_schedule = game_logic.generate_round_robin_schedule(teams)
@@ -542,8 +549,15 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
     for week_offset, matches in enumerate(full_schedule[:max_rounds], 0):
         week = current_week + week_offset
         
-        # Calculate and wait for this week's 4th-weekend Friday slot
-        match_datetime = scheduler.get_fourth_weekend_friday_at_offset(first_match_datetime, week_offset)
+        # Calculate posting hour for this week (hourly increments like Round Robin 2)
+        posting_hour = scheduler.calculate_next_posting_hour(start_hour, week_offset)
+        
+        # Create datetime for this specific hour on the same day (or next day if hour > 23)
+        match_date = first_match_datetime.date()
+        if posting_hour < start_hour and week_offset > 0:
+            # If we've wrapped past midnight, move to next day
+            match_date = match_date + timedelta(days=1)
+        match_datetime = est.localize(datetime(match_date.year, match_date.month, match_date.day, posting_hour, 0))
         readable_match_time = match_datetime.strftime("%Y-%m-%d %I:%M %p %Z")
         
         # Wait BEFORE processing (except for the first week - post immediately)
@@ -578,12 +592,7 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
                 simulation_status.set_waiting(next_time, week - 1 if week > 1 else None)
             elif not skip_wait:
                 scheduler.logger.info(f"Scheduled kickoff: {readable_match_time}")
-                # Convert match_datetime to UTC for storage
-                from datetime import datetime
-                import pytz
-                est = pytz.timezone('US/Eastern')
-                if match_datetime.tzinfo is None:
-                    match_datetime = est.localize(match_datetime)
+                # match_datetime is already in EST with timezone info
                 next_time_utc = match_datetime.astimezone(pytz.UTC).replace(tzinfo=None)
                 simulation_status.set_waiting(next_time_utc, week - 1 if week > 1 else None)
                 scheduler.wait_until_datetime(match_datetime)
@@ -756,7 +765,6 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
         # Calculate next simulation time
         if week_offset + 1 < len(full_schedule[:max_rounds]):
             next_week = current_week + week_offset + 1
-            next_match_datetime = scheduler.get_fourth_weekend_friday_at_offset(first_match_datetime, week_offset + 1)
             if wait_seconds is not None:
                 from datetime import datetime, timedelta, timezone
                 next_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=wait_seconds)
@@ -764,10 +772,12 @@ def run_round_robin_1(skip_wait=False, debug_interval=None, enable_instagram=Tru
                 from datetime import datetime, timedelta, timezone
                 next_time = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=debug_interval)
             else:
-                import pytz
-                est = pytz.timezone('US/Eastern')
-                if next_match_datetime.tzinfo is None:
-                    next_match_datetime = est.localize(next_match_datetime)
+                # Calculate next week's posting hour (hourly increments)
+                next_posting_hour = scheduler.calculate_next_posting_hour(start_hour, week_offset + 1)
+                next_match_date = first_match_datetime.date()
+                if next_posting_hour < start_hour and week_offset + 1 > 0:
+                    next_match_date = next_match_date + timedelta(days=1)
+                next_match_datetime = est.localize(datetime(next_match_date.year, next_match_date.month, next_match_date.day, next_posting_hour, 0))
                 next_time = next_match_datetime.astimezone(pytz.UTC).replace(tzinfo=None)
             simulation_status.set_waiting(next_time, week)
         else:
