@@ -1,0 +1,547 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header -->
+    <div class="glass-panel p-6 rounded-xl">
+        <h1 class="text-3xl font-bold text-white mb-2">
+            <i class="fas fa-chart-bar mr-3 text-blue-400"></i>Analytics Dashboard
+        </h1>
+        {% if active_season %}
+            <p class="text-gray-400">{{ active_season.name }} • {{ games_processed }} games analyzed</p>
+        {% endif %}
+    </div>
+
+    <!-- Player Leaderboards -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Top Players by Points -->
+        <div class="glass-panel p-6 rounded-xl">
+            <h2 class="text-xl font-bold text-emerald-400 mb-4">
+                <i class="fas fa-trophy mr-2"></i>Top Scorers
+            </h2>
+            <div class="space-y-2">
+                {% for player_key, stats in players_by_points[:10] %}
+                {% set player_name = stats.get('player_name', player_key) %}
+                <div class="flex items-center justify-between p-2 bg-gray-800/50 rounded hover:bg-gray-700/50 transition cursor-pointer" onclick="openPlayerModal('{{ player_name }}')">
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-white">{{ player_name }}</div>
+                        <div class="text-xs text-gray-400">
+                            {% if stats.get('team') %}{{ stats.get('team') }}{% endif %}
+                            {% if stats.get('role') %} • {{ stats.get('role') }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-lg font-bold text-emerald-400">{{ stats.points }}</div>
+                        <div class="text-xs text-gray-500">{{ stats.games_played }} games</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top Players by Success Rate -->
+        <div class="glass-panel p-6 rounded-xl">
+            <h2 class="text-xl font-bold text-blue-400 mb-4">
+                <i class="fas fa-bullseye mr-2"></i>Most Accurate
+            </h2>
+            <div class="space-y-2">
+                {% for player_key, stats in players_by_success[:10] %}
+                {% set player_name = stats.get('player_name', player_key) %}
+                {% if stats.games_played > 0 %}
+                <div class="flex items-center justify-between p-2 bg-gray-800/50 rounded hover:bg-gray-700/50 transition cursor-pointer" onclick="openPlayerModal('{{ player_name }}')">
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-white">{{ player_name }}</div>
+                        <div class="text-xs text-gray-400">
+                            {% if stats.get('team') %}{{ stats.get('team') }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-lg font-bold text-blue-400">{{ "%.1f"|format(stats.success_rate) }}%</div>
+                        <div class="text-xs text-gray-500">
+                            {{ stats.runs_completed + stats.throws_completed + stats.kicks_completed }}/{{ stats.runs_attempted + stats.throws_attempted + stats.kicks_attempted }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top Players by Cascade Plays -->
+        <div class="glass-panel p-6 rounded-xl">
+            <h2 class="text-xl font-bold text-yellow-400 mb-4">
+                <i class="fas fa-bolt mr-2"></i>Cascade Masters
+            </h2>
+            <div class="space-y-2">
+                {% for player_key, stats in players_by_cascade[:10] %}
+                {% set player_name = stats.get('player_name', player_key) %}
+                {% set cascade_total = stats.cascade_runs + stats.cascade_throws + stats.cascade_kicks %}
+                {% if cascade_total > 0 %}
+                <div class="flex items-center justify-between p-2 bg-gray-800/50 rounded hover:bg-gray-700/50 transition cursor-pointer" onclick="openPlayerModal('{{ player_name }}')">
+                    <div class="flex-1">
+                        <div class="text-sm font-bold text-white">{{ player_name }}</div>
+                        <div class="text-xs text-gray-400">
+                            {% if stats.get('team') %}{{ stats.get('team') }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-lg font-bold text-yellow-400">{{ cascade_total }}</div>
+                        <div class="text-xs text-gray-500">
+                            {{ "%.1f"|format(stats.cascade_rate) }}% rate
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Player Statistics Table -->
+    <div class="glass-panel p-6 rounded-xl">
+        <h2 class="text-2xl font-bold text-white mb-4">
+            <i class="fas fa-table mr-2 text-purple-400"></i>Complete Player Statistics
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-700">
+                        <th class="text-left p-3 text-gray-300 font-bold">Player</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Team</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Games</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Points</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">PPG</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Success %</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Runs</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Throws</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Kicks</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Cascades</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Best</th>
+                        <th class="text-center p-3 text-gray-300 font-bold">Consistency</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for player_key, stats in players_by_points %}
+                    {% set player_name = stats.get('player_name', player_key) %}
+                    <tr class="border-b border-gray-700/50 hover:bg-gray-800/50 transition">
+                        <td class="p-3">
+                            <div class="font-bold text-white cursor-pointer hover:text-blue-400 transition" onclick="openPlayerModal('{{ player_name }}')">{{ player_name }}</div>
+                            <div class="text-xs text-gray-500">
+                                {% if stats.get('best_stat') %}{{ stats.get('best_stat') }}{% endif %}
+                                {% if stats.get('role') %} • {{ stats.get('role') }}{% endif %}
+                            </div>
+                        </td>
+                        <td class="p-3 text-center text-gray-400 text-xs">
+                            {% if stats.get('team') %}{{ stats.get('team') }}{% else %}—{% endif %}
+                        </td>
+                        <td class="p-3 text-center text-gray-300">{{ stats.games_played }}</td>
+                        <td class="p-3 text-center font-bold text-emerald-400">{{ stats.points }}</td>
+                        <td class="p-3 text-center text-gray-300">{{ "%.1f"|format(stats.points_per_game) }}</td>
+                        <td class="p-3 text-center text-blue-400">{{ "%.1f"|format(stats.success_rate) }}%</td>
+                        <td class="p-3 text-center text-xs">
+                            <div class="text-blue-400">{{ stats.runs_completed }}/{{ stats.runs_attempted }}</div>
+                            {% if stats.cascade_runs > 0 %}
+                            <div class="text-emerald-400">⚡{{ stats.cascade_runs }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-center text-xs">
+                            <div class="text-purple-400">{{ stats.throws_completed }}/{{ stats.throws_attempted }}</div>
+                            {% if stats.cascade_throws > 0 %}
+                            <div class="text-emerald-400">⚡{{ stats.cascade_throws }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-center text-xs">
+                            <div class="text-yellow-400">{{ stats.kicks_completed }}/{{ stats.kicks_attempted }}</div>
+                            {% if stats.cascade_kicks > 0 %}
+                            <div class="text-emerald-400">⚡{{ stats.cascade_kicks }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-center text-yellow-400 font-bold">
+                            {{ stats.cascade_runs + stats.cascade_throws + stats.cascade_kicks }}
+                        </td>
+                        <td class="p-3 text-center text-emerald-400 font-bold">{{ stats.best_game }}</td>
+                        <td class="p-3 text-center">
+                            <div class="text-gray-300">{{ "%.1f"|format(stats.consistency) }}</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Team Statistics -->
+    {% if team_stats %}
+    <div class="glass-panel p-6 rounded-xl">
+        <h2 class="text-2xl font-bold text-white mb-4">
+            <i class="fas fa-users mr-2 text-cyan-400"></i>Team Statistics
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {% for team_name, stats in team_stats.items() %}
+            <div class="bg-gray-800/50 p-4 rounded-lg">
+                <h3 class="font-bold text-emerald-400 mb-2">{{ team_name }}</h3>
+                <div class="space-y-1 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Record:</span>
+                        <span class="text-white font-bold">{{ stats.wins }}-{{ stats.games - stats.wins }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Win %:</span>
+                        <span class="text-white">
+                            {{ "%.1f"|format((stats.wins / stats.games * 100) if stats.games > 0 else 0) }}%
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Points For:</span>
+                        <span class="text-emerald-400">{{ stats.points_for }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Points Against:</span>
+                        <span class="text-red-400">{{ stats.points_against }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Diff:</span>
+                        <span class="{% if stats.points_for - stats.points_against > 0 %}text-emerald-400{% else %}text-red-400{% endif %}">
+                            {{ stats.points_for - stats.points_against }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Advanced Metrics Summary -->
+    <div class="glass-panel p-6 rounded-xl">
+        <h2 class="text-2xl font-bold text-white mb-4">
+            <i class="fas fa-chart-line mr-2 text-pink-400"></i>Advanced Metrics
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-gray-800/50 p-4 rounded-lg">
+                <h3 class="text-lg font-bold text-blue-400 mb-2">Efficiency Leaders</h3>
+                <div class="space-y-2">
+                    {% for player_key, stats in players_by_points[:5] %}
+                    {% set player_name = stats.get('player_name', player_key) %}
+                    {% if stats.games_played > 0 %}
+                    <div class="flex justify-between text-sm cursor-pointer hover:bg-gray-700/30 p-1 rounded transition" onclick="openPlayerModal('{{ player_name }}')">
+                        <span class="text-gray-300">{{ player_name }}</span>
+                        <span class="text-emerald-400 font-bold">
+                            {{ "%.2f"|format(stats.points_per_attempt) }} pts/attempt
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="bg-gray-800/50 p-4 rounded-lg">
+                <h3 class="text-lg font-bold text-purple-400 mb-2">Most Consistent</h3>
+                <div class="space-y-2">
+                    {% set shown_count = [] %}
+                    {% for player_key, stats in players_by_consistency %}
+                    {% set player_name = stats.get('player_name', player_key) %}
+                    {% if stats.games_played >= 3 and shown_count|length < 4 %}
+                    <div class="flex justify-between text-sm cursor-pointer hover:bg-gray-700/30 p-1 rounded transition" onclick="openPlayerModal('{{ player_name }}')">
+                        <span class="text-gray-300">{{ player_name }}</span>
+                        <span class="text-blue-400 font-bold">
+                            {{ "%.1f"|format(stats.consistency) }}
+                        </span>
+                    </div>
+                    {% set _ = shown_count.append(1) %}
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="bg-gray-800/50 p-4 rounded-lg">
+                <h3 class="text-lg font-bold text-yellow-400 mb-2">Peak Performers</h3>
+                <div class="space-y-2">
+                    {% for player_key, stats in players_by_best_game[:5] %}
+                    {% set player_name = stats.get('player_name', player_key) %}
+                    <div class="flex justify-between text-sm cursor-pointer hover:bg-gray-700/30 p-1 rounded transition" onclick="openPlayerModal('{{ player_name }}')">
+                        <span class="text-gray-300">{{ player_name }}</span>
+                        <span class="text-yellow-400 font-bold">
+                            {{ stats.best_game }} pts (best game)
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Player Stats Modal -->
+<div id="playerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px);">
+    <div class="glass-panel rounded-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" style="background: rgba(30, 41, 59, 0.95);">
+        <div class="sticky top-0 glass-panel border-b border-gray-700 p-4 flex justify-between items-center z-10" style="background: rgba(30, 41, 59, 0.98);">
+            <h2 id="modalPlayerName" class="text-2xl font-bold text-white"></h2>
+            <button onclick="closePlayerModal()" class="text-gray-400 hover:text-white text-2xl font-bold transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="p-6">
+            <!-- Tabs -->
+            <div class="flex space-x-4 mb-6 border-b border-gray-700">
+                <button id="seasonTab" onclick="switchTab('season')" class="px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-400 transition">
+                    Season Stats
+                </button>
+                <button id="allTimeTab" onclick="switchTab('all_time')" class="px-4 py-2 font-semibold text-gray-400 hover:text-white transition">
+                    All-Time Stats
+                </button>
+            </div>
+            
+            <!-- Loading State -->
+            <div id="modalLoading" class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-4xl text-blue-400 mb-4"></i>
+                <p class="text-gray-400">Loading player stats...</p>
+            </div>
+            
+            <!-- Content -->
+            <div id="modalContent" class="hidden">
+                <!-- Player Info -->
+                <div id="playerInfo" class="mb-6 p-4 bg-gray-800/50 rounded-lg"></div>
+                
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Games Played</div>
+                        <div id="statGames" class="text-2xl font-bold text-white">—</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Total Points</div>
+                        <div id="statPoints" class="text-2xl font-bold text-emerald-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Points Per Game</div>
+                        <div id="statPPG" class="text-2xl font-bold text-blue-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Success Rate</div>
+                        <div id="statSuccess" class="text-2xl font-bold text-purple-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Points Per Attempt</div>
+                        <div id="statPPA" class="text-2xl font-bold text-yellow-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Consistency</div>
+                        <div id="statConsistency" class="text-2xl font-bold text-cyan-400">—</div>
+                    </div>
+                </div>
+                
+                <!-- Action Breakdown -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-lg font-bold text-blue-400 mb-3">Runs</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Completed:</span>
+                                <span id="statRunsCompleted" class="text-white font-bold">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Attempted:</span>
+                                <span id="statRunsAttempted" class="text-white">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Cascade:</span>
+                                <span id="statRunsCascade" class="text-emerald-400 font-bold">—</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-lg font-bold text-purple-400 mb-3">Throws</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Completed:</span>
+                                <span id="statThrowsCompleted" class="text-white font-bold">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Attempted:</span>
+                                <span id="statThrowsAttempted" class="text-white">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Cascade:</span>
+                                <span id="statThrowsCascade" class="text-emerald-400 font-bold">—</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-lg font-bold text-yellow-400 mb-3">Kicks</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Completed:</span>
+                                <span id="statKicksCompleted" class="text-white font-bold">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Attempted:</span>
+                                <span id="statKicksAttempted" class="text-white">—</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Cascade:</span>
+                                <span id="statKicksCascade" class="text-emerald-400 font-bold">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Game History -->
+                <div class="bg-gray-800/50 p-4 rounded-lg">
+                    <h3 class="text-lg font-bold text-white mb-3">Game History</h3>
+                    <div id="gameHistory" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentTab = 'season';
+let currentPlayerData = null;
+
+function openPlayerModal(playerName) {
+    const modal = document.getElementById('playerModal');
+    const modalPlayerName = document.getElementById('modalPlayerName');
+    const modalLoading = document.getElementById('modalLoading');
+    const modalContent = document.getElementById('modalContent');
+    
+    modalPlayerName.textContent = playerName;
+    modal.classList.remove('hidden');
+    modalContent.classList.add('hidden');
+    modalLoading.classList.remove('hidden');
+    
+    // Reset to season tab
+    currentTab = 'season';
+    switchTab('season');
+    
+    // Fetch player stats
+    fetch(`/api/player_stats/${encodeURIComponent(playerName)}`)
+        .then(response => response.json())
+        .then(data => {
+            currentPlayerData = data;
+            modalLoading.classList.add('hidden');
+            modalContent.classList.remove('hidden');
+            updateModalContent();
+        })
+        .catch(error => {
+            console.error('Error fetching player stats:', error);
+            modalLoading.innerHTML = '<p class="text-red-400">Error loading player stats. Please try again.</p>';
+        });
+}
+
+function closePlayerModal() {
+    const modal = document.getElementById('playerModal');
+    modal.classList.add('hidden');
+    currentPlayerData = null;
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    
+    // Update tab buttons
+    const seasonTab = document.getElementById('seasonTab');
+    const allTimeTab = document.getElementById('allTimeTab');
+    
+    if (tab === 'season') {
+        seasonTab.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+        seasonTab.classList.remove('text-gray-400');
+        allTimeTab.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+        allTimeTab.classList.add('text-gray-400');
+    } else {
+        allTimeTab.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+        allTimeTab.classList.remove('text-gray-400');
+        seasonTab.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+        seasonTab.classList.add('text-gray-400');
+    }
+    
+    if (currentPlayerData) {
+        updateModalContent();
+    }
+}
+
+function updateModalContent() {
+    if (!currentPlayerData) return;
+    
+    const stats = currentTab === 'season' ? currentPlayerData.season : currentPlayerData.all_time;
+    const playerInfo = currentPlayerData.player_info;
+    
+    // Update player info
+    const playerInfoDiv = document.getElementById('playerInfo');
+    let infoHtml = `<div class="flex items-center justify-between">`;
+    infoHtml += `<div><span class="text-gray-400">Team:</span> <span class="text-white font-bold">${playerInfo.team || '—'}</span></div>`;
+    if (playerInfo.role) {
+        infoHtml += `<div><span class="text-gray-400">Role:</span> <span class="text-white">${playerInfo.role}</span></div>`;
+    }
+    if (currentTab === 'season' && stats.season_name) {
+        infoHtml += `<div><span class="text-gray-400">Season:</span> <span class="text-blue-400">${stats.season_name}</span></div>`;
+    }
+    infoHtml += `</div>`;
+    playerInfoDiv.innerHTML = infoHtml;
+    
+    // Update main stats
+    document.getElementById('statGames').textContent = stats.games_played || 0;
+    document.getElementById('statPoints').textContent = stats.points || 0;
+    document.getElementById('statPPG').textContent = stats.points_per_game ? stats.points_per_game.toFixed(1) : '0.0';
+    document.getElementById('statSuccess').textContent = stats.success_rate ? stats.success_rate.toFixed(1) + '%' : '0.0%';
+    document.getElementById('statPPA').textContent = stats.points_per_attempt ? stats.points_per_attempt.toFixed(2) : '0.00';
+    document.getElementById('statConsistency').textContent = stats.consistency ? stats.consistency.toFixed(1) : '0.0';
+    
+    // Update action breakdown
+    document.getElementById('statRunsCompleted').textContent = stats.runs_completed || 0;
+    document.getElementById('statRunsAttempted').textContent = stats.runs_attempted || 0;
+    document.getElementById('statRunsCascade').textContent = stats.cascade_runs || 0;
+    document.getElementById('statThrowsCompleted').textContent = stats.throws_completed || 0;
+    document.getElementById('statThrowsAttempted').textContent = stats.throws_attempted || 0;
+    document.getElementById('statThrowsCascade').textContent = stats.cascade_throws || 0;
+    document.getElementById('statKicksCompleted').textContent = stats.kicks_completed || 0;
+    document.getElementById('statKicksAttempted').textContent = stats.kicks_attempted || 0;
+    document.getElementById('statKicksCascade').textContent = stats.cascade_kicks || 0;
+    
+    // Update game history
+    const gameHistory = document.getElementById('gameHistory');
+    if (stats.game_details && stats.game_details.length > 0) {
+        let historyHtml = '';
+        stats.game_details.forEach(game => {
+            // Check if player was injured in this game
+            const gameStats = game.stats || {};
+            const isInjured = gameStats.injured || false;
+            const injuredDuringGame = gameStats.injured_during_game || false;
+            const injuryBadge = isInjured ? 
+                `<span class="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/50 font-bold ml-2" title="${injuredDuringGame ? 'Injured during this game' : 'Playing injured'}">⚠️</span>` : '';
+            
+            historyHtml += `<div class="flex justify-between items-center p-2 bg-gray-700/50 rounded text-sm">`;
+            historyHtml += `<div class="flex items-center">`;
+            historyHtml += `<span class="text-white font-bold">Week ${game.week}</span>`;
+            if (game.game_number) {
+                historyHtml += ` <span class="text-gray-400">Game ${game.game_number}</span>`;
+            }
+            historyHtml += injuryBadge;
+            historyHtml += `</div>`;
+            historyHtml += `<div class="text-gray-400">${game.team1} vs ${game.team2}</div>`;
+            historyHtml += `<div class="text-emerald-400 font-bold">${game.points} pts</div>`;
+            historyHtml += `</div>`;
+        });
+        gameHistory.innerHTML = historyHtml;
+    } else {
+        gameHistory.innerHTML = '<p class="text-gray-400 text-center py-4">No games played yet</p>';
+    }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closePlayerModal();
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('playerModal').addEventListener('click', function(event) {
+    if (event.target === this) {
+        closePlayerModal();
+    }
+});
+</script>
+{% endblock %}
+

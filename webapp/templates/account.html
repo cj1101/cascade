@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="glass-panel rounded-lg p-8 mb-6">
+        <h1 class="text-3xl font-bold mb-6 text-white">
+            <i class="fas fa-user-circle mr-2 text-blue-400"></i>Account Settings
+        </h1>
+        
+        <div class="space-y-6">
+            <!-- Favorite Team Selection -->
+            <div>
+                <label class="block text-lg font-semibold mb-3 text-gray-300">
+                    <i class="fas fa-heart mr-2 text-red-400"></i>Favorite Team
+                </label>
+                <p class="text-sm text-gray-400 mb-4">
+                    Select your favorite team to receive confetti celebrations when they win!
+                </p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                    {% for team in teams %}
+                    <label class="flex items-center p-3 rounded-lg border-2 cursor-pointer transition-all hover:bg-gray-700 {% if team == current_favorite %}border-blue-400 bg-blue-900/30{% else %}border-gray-600{% endif %}">
+                        <input type="radio" name="favorite_team" value="{{ team }}" class="mr-3" {% if team == current_favorite %}checked{% endif %}>
+                        <span class="text-white font-medium">{{ team }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                
+                {% if not teams %}
+                <p class="text-yellow-400 text-sm">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>No teams available. Please ensure game_state.json is properly configured.
+                </p>
+                {% endif %}
+                
+                <button id="save-favorite-btn" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-save mr-2"></i>Save Favorite Team
+                </button>
+                
+                <div id="save-message" class="mt-3 hidden"></div>
+            </div>
+            
+            <!-- Current Selection Display -->
+            {% if current_favorite %}
+            <div class="mt-6 p-4 bg-green-900/30 border border-green-500 rounded-lg">
+                <p class="text-green-300">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <strong>Current Favorite:</strong> {{ current_favorite }}
+                </p>
+            </div>
+            {% else %}
+            <div class="mt-6 p-4 bg-gray-800 border border-gray-600 rounded-lg">
+                <p class="text-gray-400">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    No favorite team selected. Choose a team above to get started!
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const saveBtn = document.getElementById('save-favorite-btn');
+    const saveMessage = document.getElementById('save-message');
+    
+    saveBtn.addEventListener('click', function() {
+        const selectedTeam = document.querySelector('input[name="favorite_team"]:checked');
+        
+        if (!selectedTeam) {
+            showMessage('Please select a team first', 'error');
+            return;
+        }
+        
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+        
+        fetch('/api/update_favorite_team', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                team_name: selectedTeam.value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage('Favorite team saved successfully!', 'success');
+                // Reload page after a short delay to show updated state
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showMessage(data.message || 'Error saving favorite team', 'error');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Favorite Team';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('Network error. Please try again.', 'error');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Favorite Team';
+        });
+    });
+    
+    function showMessage(message, type) {
+        saveMessage.className = 'mt-3 p-3 rounded-lg ' + (type === 'success' ? 'bg-green-900/50 text-green-300 border border-green-500' : 'bg-red-900/50 text-red-300 border border-red-500');
+        saveMessage.textContent = message;
+        saveMessage.classList.remove('hidden');
+        
+        if (type === 'success') {
+            setTimeout(() => {
+                saveMessage.classList.add('hidden');
+            }, 3000);
+        }
+    }
+});
+</script>
+{% endblock %}
+

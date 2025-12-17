@@ -2,445 +2,1061 @@
   "teams": [
     {
       "name": "Apex Predators",
-      "overall_advantage": 3,
-      "run_advantage": 3,
-      "throw_advantage": 3,
+      "overall_advantage": 2,
+      "run_advantage": 2,
+      "throw_advantage": 1,
       "kick_advantage": 3,
-      "wins": 13,
-      "losses": 1,
-      "points_for": 194,
-      "points_against": 87,
+      "wins": 27,
+      "losses": 8,
+      "points_for": 413,
+      "points_against": 253,
       "players": [
         {
           "name": "Alex Rivera",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.08528091165475851
+          },
+          "season_stats": {
+            "total_points": 11,
+            "total_attempts": 22,
+            "total_completions": 6,
+            "total_yards": 139
+          }
         },
         {
           "name": "Blake Chen",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.07307618018450776
+          },
+          "season_stats": {
+            "total_points": 12,
+            "total_attempts": 24,
+            "total_completions": 6,
+            "total_yards": 170
+          }
         },
         {
           "name": "Casey Morgan",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.06483037210317132
+          },
+          "season_stats": {
+            "total_points": 13,
+            "total_attempts": 27,
+            "total_completions": 10,
+            "total_yards": 132
+          }
         },
         {
           "name": "Dakota Kim",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.029409094746398683
+          },
+          "season_stats": {
+            "total_points": 5,
+            "total_attempts": 28,
+            "total_completions": 3,
+            "total_yards": 213
+          }
         },
         {
           "name": "Eli Thompson",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.05559834172433689
+          },
+          "season_stats": {
+            "total_points": 17,
+            "total_attempts": 32,
+            "total_completions": 8,
+            "total_yards": 266
+          }
         },
         {
           "name": "Finley Park",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.1261814296643744
+          },
+          "season_stats": {
+            "total_points": 9,
+            "total_attempts": 24,
+            "total_completions": 4,
+            "total_yards": 254
+          }
         },
         {
           "name": "Gray Martinez",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.08308875931784254
+          },
+          "season_stats": {
+            "total_points": 10,
+            "total_attempts": 24,
+            "total_completions": 6,
+            "total_yards": 165
+          }
         }
       ]
     },
     {
       "name": "Vista Vipers",
-      "overall_advantage": -3,
-      "run_advantage": 0,
+      "overall_advantage": 1,
+      "run_advantage": 3,
       "throw_advantage": 1,
       "kick_advantage": -3,
-      "wins": 6,
-      "losses": 8,
-      "points_for": 136,
-      "points_against": 131,
+      "wins": 17,
+      "losses": 18,
+      "points_for": 337,
+      "points_against": 326,
       "players": [
         {
           "name": "Haze Nelson",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.05080673633648386
+          },
+          "season_stats": {
+            "total_points": 10,
+            "total_attempts": 25,
+            "total_completions": 7,
+            "total_yards": 135
+          }
         },
         {
           "name": "Iris Carter",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": -1.0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.10516469818962765
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 23,
+            "total_completions": 3,
+            "total_yards": 238
+          }
         },
         {
           "name": "Jasper Mitchell",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.07343039879119165
+          },
+          "season_stats": {
+            "total_points": 17,
+            "total_attempts": 31,
+            "total_completions": 8,
+            "total_yards": 223
+          }
         },
         {
           "name": "Kestrel Perez",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": -1.0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.06323690484470207
+          },
+          "season_stats": {
+            "total_points": 19,
+            "total_attempts": 27,
+            "total_completions": 7,
+            "total_yards": 255
+          }
         },
         {
           "name": "Lark Roberts",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 1.5,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.026895291914305917
+          },
+          "season_stats": {
+            "total_points": 5,
+            "total_attempts": 25,
+            "total_completions": 2,
+            "total_yards": 168
+          }
         },
         {
           "name": "Mist Turner",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 1.5,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.08445460891918963
+          },
+          "season_stats": {
+            "total_points": 14,
+            "total_attempts": 22,
+            "total_completions": 8,
+            "total_yards": 125
+          }
         },
         {
           "name": "Nimbus Phillips",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 1.5,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.10667983369363115
+          },
+          "season_stats": {
+            "total_points": 12,
+            "total_attempts": 31,
+            "total_completions": 4,
+            "total_yards": 275
+          }
         }
       ]
     },
     {
       "name": "Skybound Storm",
-      "overall_advantage": 2,
+      "overall_advantage": -3,
       "run_advantage": -3,
       "throw_advantage": 0,
-      "kick_advantage": 0,
-      "wins": 7,
-      "losses": 7,
-      "points_for": 120,
-      "points_against": 145,
+      "kick_advantage": 1,
+      "wins": 14,
+      "losses": 21,
+      "points_for": 282,
+      "points_against": 357,
       "players": [
         {
           "name": "Finley Park",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.03895987063929711
+          },
+          "season_stats": {
+            "total_points": 6,
+            "total_attempts": 30,
+            "total_completions": 4,
+            "total_yards": 196
+          }
         },
         {
           "name": "Gray Martinez",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.0915153062488791
+          },
+          "season_stats": {
+            "total_points": 2,
+            "total_attempts": 29,
+            "total_completions": 2,
+            "total_yards": 288
+          }
         },
         {
           "name": "Harper Lee",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.06805613921970216
+          },
+          "season_stats": {
+            "total_points": 3,
+            "total_attempts": 20,
+            "total_completions": 1,
+            "total_yards": 172
+          }
         },
         {
           "name": "Indigo Singh",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.05503580137799588
+          },
+          "season_stats": {
+            "total_points": 5,
+            "total_attempts": 21,
+            "total_completions": 2,
+            "total_yards": 205
+          }
         },
         {
           "name": "Jade Williams",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.055395443298517213
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 21,
+            "total_completions": 7,
+            "total_yards": 104
+          }
         },
         {
           "name": "Kai Johnson",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.06529622540395942
+          },
+          "season_stats": {
+            "total_points": 11,
+            "total_attempts": 23,
+            "total_completions": 8,
+            "total_yards": 143
+          }
         },
         {
           "name": "Lane Davis",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.04454310408374915
+          },
+          "season_stats": {
+            "total_points": 6,
+            "total_attempts": 26,
+            "total_completions": 5,
+            "total_yards": 136
+          }
         }
       ]
     },
     {
       "name": "Raven's Renegades",
       "overall_advantage": -3,
-      "run_advantage": -2,
-      "throw_advantage": 3,
+      "run_advantage": -3,
+      "throw_advantage": 1,
       "kick_advantage": -3,
-      "wins": 3,
-      "losses": 11,
-      "points_for": 103,
-      "points_against": 171,
+      "wins": 10,
+      "losses": 25,
+      "points_for": 271,
+      "points_against": 405,
       "players": [
         {
           "name": "Storm Collins",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.0930055959250389
+          },
+          "season_stats": {
+            "total_points": 2,
+            "total_attempts": 15,
+            "total_completions": 2,
+            "total_yards": 106
+          }
         },
         {
           "name": "Tide Stewart",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.1297179762807552
+          },
+          "season_stats": {
+            "total_points": 14,
+            "total_attempts": 23,
+            "total_completions": 7,
+            "total_yards": 209
+          }
         },
         {
           "name": "Vale Sanchez",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.08901683842397748
+          },
+          "season_stats": {
+            "total_points": 10,
+            "total_attempts": 20,
+            "total_completions": 6,
+            "total_yards": 161
+          }
         },
         {
           "name": "Willow Morris",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.12692299283510314
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 25,
+            "total_completions": 5,
+            "total_yards": 134
+          }
         },
         {
           "name": "Zen Rogers",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.062347008186589975
+          },
+          "season_stats": {
+            "total_points": 8,
+            "total_attempts": 25,
+            "total_completions": 3,
+            "total_yards": 245
+          }
         },
         {
           "name": "Aurora Reed",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.08771726049154341
+          },
+          "season_stats": {
+            "total_points": 3,
+            "total_attempts": 23,
+            "total_completions": 3,
+            "total_yards": 112
+          }
         },
         {
           "name": "Blaze Cook",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.051100585619313334
+          },
+          "season_stats": {
+            "total_points": 16,
+            "total_attempts": 25,
+            "total_completions": 8,
+            "total_yards": 202
+          }
         }
       ]
     },
     {
       "name": "Cove Crushers",
-      "overall_advantage": -1,
-      "run_advantage": 2,
+      "overall_advantage": 3,
+      "run_advantage": 3,
       "throw_advantage": -3,
-      "kick_advantage": 1,
-      "wins": 9,
-      "losses": 5,
-      "points_for": 156,
-      "points_against": 122,
+      "kick_advantage": 3,
+      "wins": 22,
+      "losses": 13,
+      "points_for": 372,
+      "points_against": 305,
       "players": [
         {
           "name": "Kestrel Perez",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.12926890550871972
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 29,
+            "total_completions": 4,
+            "total_yards": 210
+          }
         },
         {
           "name": "Lark Roberts",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.14863737475307162
+          },
+          "season_stats": {
+            "total_points": 11,
+            "total_attempts": 27,
+            "total_completions": 5,
+            "total_yards": 255
+          }
         },
         {
           "name": "Mist Turner",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.09526934855937341
+          },
+          "season_stats": {
+            "total_points": 9,
+            "total_attempts": 29,
+            "total_completions": 8,
+            "total_yards": 152
+          }
         },
         {
           "name": "Nimbus Phillips",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.059306687637690515
+          },
+          "season_stats": {
+            "total_points": 10,
+            "total_attempts": 28,
+            "total_completions": 5,
+            "total_yards": 207
+          }
         },
         {
           "name": "Onyx Campbell",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.06539816515310662
+          },
+          "season_stats": {
+            "total_points": 6,
+            "total_attempts": 21,
+            "total_completions": 6,
+            "total_yards": 83
+          }
         },
         {
           "name": "Pax Parker",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0.0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.05234600269534004
+          },
+          "season_stats": {
+            "total_points": 11,
+            "total_attempts": 36,
+            "total_completions": 5,
+            "total_yards": 333
+          }
         },
         {
           "name": "Quill Evans",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.05043484009261442
+          },
+          "season_stats": {
+            "total_points": 13,
+            "total_attempts": 37,
+            "total_completions": 7,
+            "total_yards": 326
+          }
         }
       ]
     },
     {
       "name": "Ember Enforcers",
-      "overall_advantage": 1,
-      "run_advantage": 2,
-      "throw_advantage": 2,
-      "kick_advantage": -1,
-      "wins": 7,
-      "losses": 7,
-      "points_for": 151,
-      "points_against": 132,
+      "overall_advantage": 2,
+      "run_advantage": -3,
+      "throw_advantage": 3,
+      "kick_advantage": 0,
+      "wins": 20,
+      "losses": 15,
+      "points_for": 364,
+      "points_against": 296,
       "players": [
         {
           "name": "Flame Ward",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "kick_boost",
+            "value": 0.14444329241764198
+          },
+          "season_stats": {
+            "total_points": 3,
+            "total_attempts": 22,
+            "total_completions": 2,
+            "total_yards": 155
+          }
         },
         {
           "name": "Glow Bell",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.0794032335099307
+          },
+          "season_stats": {
+            "total_points": 14,
+            "total_attempts": 21,
+            "total_completions": 10,
+            "total_yards": 125
+          }
         },
         {
           "name": "Halo Murphy",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.050139254985740594
+          },
+          "season_stats": {
+            "total_points": 15,
+            "total_attempts": 31,
+            "total_completions": 8,
+            "total_yards": 236
+          }
         },
         {
           "name": "Iris Alexander",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.09211484469579839
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 16,
+            "total_completions": 6,
+            "total_yards": 84
+          }
         },
         {
           "name": "Jewel Wood",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.09660629645760925
+          },
+          "season_stats": {
+            "total_points": 9,
+            "total_attempts": 28,
+            "total_completions": 5,
+            "total_yards": 206
+          }
         },
         {
           "name": "Karma Watson",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.05459149431100958
+          },
+          "season_stats": {
+            "total_points": 2,
+            "total_attempts": 17,
+            "total_completions": 1,
+            "total_yards": 159
+          }
         },
         {
           "name": "Luna Brooks",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.08786916480838287
+          },
+          "season_stats": {
+            "total_points": 10,
+            "total_attempts": 24,
+            "total_completions": 4,
+            "total_yards": 167
+          }
         }
       ]
     },
     {
       "name": "Pinnacle Pioneers",
-      "overall_advantage": 3,
-      "run_advantage": -1,
-      "throw_advantage": 3,
+      "overall_advantage": 2,
+      "run_advantage": 1,
+      "throw_advantage": -2,
       "kick_advantage": 3,
-      "wins": 8,
-      "losses": 6,
-      "points_for": 119,
-      "points_against": 137,
+      "wins": 20,
+      "losses": 15,
+      "points_for": 322,
+      "points_against": 310,
       "players": [
         {
           "name": "Finley Park",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.09214402004385401
+          },
+          "season_stats": {
+            "total_points": 8,
+            "total_attempts": 34,
+            "total_completions": 8,
+            "total_yards": 178
+          }
         },
         {
           "name": "Gray Martinez",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 1.0,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.08323161844843445
+          },
+          "season_stats": {
+            "total_points": 13,
+            "total_attempts": 36,
+            "total_completions": 8,
+            "total_yards": 197
+          }
         },
         {
           "name": "Harper Lee",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 0.0,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.12460903612330108
+          },
+          "season_stats": {
+            "total_points": 9,
+            "total_attempts": 30,
+            "total_completions": 6,
+            "total_yards": 227
+          }
         },
         {
           "name": "Indigo Singh",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.05541261847545732
+          },
+          "season_stats": {
+            "total_points": 14,
+            "total_attempts": 29,
+            "total_completions": 9,
+            "total_yards": 163
+          }
         },
         {
           "name": "Jade Williams",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 1.0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.025224984093844008
+          },
+          "season_stats": {
+            "total_points": 14,
+            "total_attempts": 32,
+            "total_completions": 8,
+            "total_yards": 172
+          }
         },
         {
           "name": "Kai Johnson",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.08822667651116825
+          },
+          "season_stats": {
+            "total_points": 8,
+            "total_attempts": 16,
+            "total_completions": 4,
+            "total_yards": 121
+          }
         },
         {
           "name": "Lane Davis",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 1.0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.04155058187600345
+          },
+          "season_stats": {
+            "total_points": 9,
+            "total_attempts": 21,
+            "total_completions": 3,
+            "total_yards": 210
+          }
         }
       ]
     },
     {
       "name": "Evan City Vanguards",
-      "overall_advantage": -3,
-      "run_advantage": -2,
+      "overall_advantage": -2,
+      "run_advantage": -1,
       "throw_advantage": -2,
-      "kick_advantage": 0,
-      "wins": 3,
-      "losses": 11,
-      "points_for": 115,
-      "points_against": 169,
+      "kick_advantage": -3,
+      "wins": 10,
+      "losses": 25,
+      "points_for": 274,
+      "points_against": 383,
       "players": [
         {
           "name": "Aurora Reed",
-          "ranking": 6,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 0.5,
+          "advantage": {
+            "type": "run_boost",
+            "value": 0.06788352993185373
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 18,
+            "total_completions": 4,
+            "total_yards": 103
+          }
         },
         {
           "name": "Blaze Cook",
-          "ranking": 3,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.023258678386763737
+          },
+          "season_stats": {
+            "total_points": 12,
+            "total_attempts": 19,
+            "total_completions": 5,
+            "total_yards": 139
+          }
         },
         {
           "name": "Cinder Morgan",
-          "ranking": 5,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": 1.0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.041394587164965496
+          },
+          "season_stats": {
+            "total_points": 12,
+            "total_attempts": 21,
+            "total_completions": 6,
+            "total_yards": 145
+          }
         },
         {
           "name": "Dawn Bailey",
-          "ranking": 1,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Anchor"
+          "role": "Anchor",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "throw_boost",
+            "value": 0.06298575870802417
+          },
+          "season_stats": {
+            "total_points": 6,
+            "total_attempts": 18,
+            "total_completions": 2,
+            "total_yards": 133
+          }
         },
         {
           "name": "Ember Rivera",
-          "ranking": 2,
+          "ranking": 4.0,
           "best_stat": "Run",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": 1.0,
+          "advantage": {
+            "type": "cascade_boost",
+            "value": 0.03720711357500972
+          },
+          "season_stats": {
+            "total_points": 6,
+            "total_attempts": 24,
+            "total_completions": 2,
+            "total_yards": 274
+          }
         },
         {
           "name": "Flame Ward",
-          "ranking": 4,
+          "ranking": 4.0,
           "best_stat": "Kick",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.060086395736313886
+          },
+          "season_stats": {
+            "total_points": 7,
+            "total_attempts": 14,
+            "total_completions": 3,
+            "total_yards": 100
+          }
         },
         {
           "name": "Glow Bell",
-          "ranking": 7,
+          "ranking": 4.0,
           "best_stat": "Throw",
-          "role": "Runner"
+          "role": "Runner",
+          "momentum": -0.5,
+          "advantage": {
+            "type": "block_boost",
+            "value": 0.06269039656372655
+          },
+          "season_stats": {
+            "total_points": 0,
+            "total_attempts": 18,
+            "total_completions": 0,
+            "total_yards": 136
+          }
         }
       ]
     }
   ],
-  "current_week": 15,
-  "round_robin_num": 2
+  "current_week": 8,
+  "round_robin_num": 1
 }

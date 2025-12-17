@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Cascade logo">
+  <defs>
+    <linearGradient id="cascadeGrad" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="cascadeGradDark" x1="96" y1="96" x2="416" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0891b2"/>
+      <stop offset="1" stop-color="#0ea5a6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer arc -->
+  <path
+    d="M 72 200 Q 256 92 440 200"
+    fill="none"
+    stroke="url(#cascadeGrad)"
+    stroke-width="76"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Eye lower sweep -->
+  <path
+    d="M 110 256 Q 256 404 402 256"
+    fill="none"
+    stroke="url(#cascadeGrad)"
+    stroke-width="92"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Bottom point -->
+  <path
+    d="M 256 404 L 224 456 Q 256 488 288 456 Z"
+    fill="url(#cascadeGrad)"
+  />
+
+  <!-- Inner ring + core -->
+  <circle cx="256" cy="276" r="84" fill="none" stroke="url(#cascadeGradDark)" stroke-width="34"/>
+  <circle cx="256" cy="276" r="52" fill="url(#cascadeGrad)"/>
+</svg>
+
+

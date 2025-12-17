@@ -1,151 +1,608 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto" x-data="{
-    selectedGameId: null,
-    selectedTeam: '',
-    selectedBetType: '',
-    selectedOdds: 0,
-    wagerAmount: 100,
-    userTokens: {{ user.tokens }},
-
-    get potentialPayout() {
-        if (!this.selectedOdds || this.wagerAmount <= 0) return 0;
-        let profit = 0;
-        if (this.selectedOdds > 0) {
-            profit = this.wagerAmount * (this.selectedOdds / 100);
-        } else {
-            profit = this.wagerAmount * (100 / Math.abs(this.selectedOdds));
-        }
-        return Math.floor(this.wagerAmount + profit);
-    },
-
-    openBetModal(gameId, team, type, odds) {
-        this.selectedGameId = gameId;
-        this.selectedTeam = team;
-        this.selectedBetType = type;
-        this.selectedOdds = odds;
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    },
-
-    async submitBet() {
-        if (this.wagerAmount > this.userTokens) {
-            alert('Insufficient tokens!');
-            return;
-        }
-
-        const response = await fetch('/api/place_bet', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                game_id: this.selectedGameId,
-                bet_type: this.selectedBetType,
-                selection: this.selectedTeam,
-                amount: this.wagerAmount,
-                odds: this.selectedOdds
-            })
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            this.userTokens = result.new_balance;
-            this.selectedGameId = null; // Close betting interface
-            alert('Bet Placed Successfully!');
-            window.location.reload();
-        } else {
-            alert(result.message);
-        }
-    }
-}">
-
-    <!-- Betting Slip (Conditional Display) -->
-    <div x-show="selectedGameId" class="mb-8 glass-panel p-6 rounded-xl border-l-4 border-yellow-500 animate-fade-in-down" style="display: none;">
-        <div class="flex justify-between items-start mb-4">
-            <h3 class="text-xl font-bold text-yellow-400">
-                <i class="fas fa-ticket-alt mr-2"></i>Wager Slip
-            </h3>
-            <button @click="selectedGameId = null" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+<div class="max-w-7xl mx-auto" x-data="bettingApp()" x-init="init()">
+    <!-- Balance Display -->
+    <div class="mb-6 glass-panel p-4 rounded-lg flex justify-between items-center">
+        <div>
+            <span class="text-gray-400 text-sm">Your Balance</span>
+            <div class="text-3xl font-bold text-yellow-400" x-text="userTokens.toLocaleString()"></div>
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-                <p class="text-gray-400 text-sm">Selection</p>
-                <div class="text-2xl font-bold text-white mb-1" x-text="selectedTeam"></div>
-                <div class="text-sm font-mono text-blue-400 mb-4" x-text="selectedBetType.toUpperCase() + ' @ ' + (selectedOdds > 0 ? '+' : '') + selectedOdds"></div>
-
-                <p class="text-gray-400 text-sm">Your Balance</p>
-                <p class="font-mono text-white"><span x-text="userTokens"></span> Tokens</p>
-            </div>
-
-            <div class="bg-gray-800 p-4 rounded-lg">
-                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Wager Amount</label>
-                <div class="relative">
-                    <span class="absolute left-3 top-2 text-gray-500"><i class="fas fa-coins"></i></span>
-                    <input type="number" x-model.number="wagerAmount" class="w-full bg-gray-900 border border-gray-600 rounded p-2 pl-10 text-white font-mono focus:border-yellow-500 focus:outline-none">
-                </div>
-
-                <div class="mt-4 flex justify-between items-end border-t border-gray-700 pt-3">
-                    <span class="text-sm text-gray-400">Potential Payout</span>
-                    <span class="text-xl font-bold text-emerald-400" x-text="potentialPayout"></span>
-                </div>
-
-                <button @click="submitBet" class="w-full mt-4 bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 rounded transition">
-                    Place Bet
-                </button>
-            </div>
+        <div class="text-right">
+            <span class="text-gray-400 text-sm">Active Bets</span>
+            <div class="text-2xl font-bold text-white" x-text="activeBetsCount"></div>
         </div>
     </div>
 
-    <h2 class="text-3xl font-bold text-white mb-8 neon-text">Upcoming Matchups</h2>
+    <!-- Tab Navigation -->
+    <div class="mb-6 flex space-x-2 border-b border-gray-700">
+        <button @click="activeTab = 'all'" 
+                :class="activeTab === 'all' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-white'"
+                class="px-4 py-2 font-semibold transition">
+            All Games
+        </button>
+        <button @click="activeTab = 'moneyline'" 
+                :class="activeTab === 'moneyline' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-white'"
+                class="px-4 py-2 font-semibold transition">
+            Moneylines
+        </button>
+        <button @click="activeTab = 'spreads'" 
+                :class="activeTab === 'spreads' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-white'"
+                class="px-4 py-2 font-semibold transition">
+            Spreads & Totals
+        </button>
+        <button @click="activeTab = 'player_props'" 
+                :class="activeTab === 'player_props' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-white'"
+                class="px-4 py-2 font-semibold transition">
+            Player Props
+        </button>
+        <button @click="activeTab = 'team_props'" 
+                :class="activeTab === 'team_props' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-gray-400 hover:text-white'"
+                class="px-4 py-2 font-semibold transition">
+            Team Props
+        </button>
+    </div>
 
-    {% if games %}
-        <div class="space-y-6">
-            {% for game in games %}
-            <div class="glass-panel rounded-xl overflow-hidden hover:bg-gray-800/50 transition">
-                <div class="grid grid-cols-12">
-                    <!-- Date/Time -->
-                    <div class="col-span-12 md:col-span-2 bg-gray-900/50 p-4 flex flex-col justify-center items-center text-center border-b md:border-b-0 md:border-r border-gray-700">
-                        <span class="text-xs font-bold text-gray-500 uppercase">Week {{ game.week }}</span>
-                        <span class="text-lg font-bold text-white">GAME {{ loop.index }}</span>
+    <!-- Betting Slip Sidebar (Fixed Position) -->
+    <div x-show="bettingSlip.length > 0" 
+         class="fixed right-4 top-24 w-96 glass-panel p-6 rounded-xl border-l-4 border-yellow-500 z-50 max-h-[80vh] overflow-y-auto"
+         style="display: none;">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-yellow-400">
+                <i class="fas fa-ticket-alt mr-2"></i>Betting Slip
+            </h3>
+            <button @click="clearSlip()" class="text-gray-400 hover:text-white">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Single Bets -->
+        <div x-show="singleBets.length > 0" class="mb-6">
+            <h4 class="text-sm font-bold text-gray-400 uppercase mb-2">Single Bets</h4>
+            <div class="space-y-2">
+                <template x-for="(bet, index) in singleBets" :key="index">
+                    <div class="bg-gray-800 p-3 rounded-lg flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="text-sm font-bold text-white" x-text="bet.description"></div>
+                            <div class="text-xs text-gray-400" x-text="bet.betType + ' @ ' + (bet.odds > 0 ? '+' : '') + bet.odds"></div>
+                            <div class="text-xs text-gray-500 mt-1">Wager: <span x-text="bet.amount"></span> tokens</div>
+                        </div>
+                        <button @click="removeBet(index)" class="text-red-400 hover:text-red-300 ml-2">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Parlay Bets -->
+        <div x-show="parlayBets.length > 0" class="mb-6">
+            <h4 class="text-sm font-bold text-gray-400 uppercase mb-2">Parlay</h4>
+            <div class="space-y-2 mb-4">
+                <template x-for="(bet, index) in parlayBets" :key="index">
+                    <div class="bg-gray-800 p-3 rounded-lg flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="text-sm font-bold text-white" x-text="bet.description"></div>
+                            <div class="text-xs text-gray-400" x-text="bet.betType + ' @ ' + (bet.odds > 0 ? '+' : '') + bet.odds"></div>
+                        </div>
+                        <button @click="removeParlayBet(index)" class="text-red-400 hover:text-red-300 ml-2">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </template>
+            </div>
+            <div class="bg-gray-800 p-3 rounded-lg mb-4">
+                <div class="text-sm text-gray-400">Parlay Odds</div>
+                <div class="text-xl font-bold text-yellow-400" x-text="(parlayCombinedOdds > 0 ? '+' : '') + parlayCombinedOdds"></div>
+            </div>
+        </div>
+
+        <!-- Wager Input -->
+        <div class="mb-4">
+            <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Total Wager</label>
+            <input type="number" x-model.number="totalWager" 
+                   class="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white font-mono focus:border-yellow-500 focus:outline-none"
+                   min="1" :max="userTokens">
+        </div>
+
+        <!-- Payout Display -->
+        <div class="mb-4 p-4 bg-gray-800 rounded-lg">
+            <div class="flex justify-between items-end border-b border-gray-700 pb-2 mb-2">
+                <span class="text-sm text-gray-400">Total Payout</span>
+                <span class="text-2xl font-bold text-emerald-400" x-text="totalPayout.toLocaleString()"></span>
+            </div>
+            <div class="text-xs text-gray-500">
+                <div>Single Bets: <span x-text="singleBetsPayout.toLocaleString()"></span></div>
+                <div x-show="parlayBets.length > 0">Parlay: <span x-text="parlayPayout.toLocaleString()"></span></div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button @click="submitBets()" 
+                :disabled="totalWager > userTokens || totalWager <= 0 || bettingSlip.length === 0"
+                class="w-full bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 rounded transition"
+                onclick="fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:121',message:'Button click detected (onclick)',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});">
+            Place <span x-text="parlayBets.length > 0 ? 'Parlay' : 'Bets'"></span>
+        </button>
+    </div>
+
+    <!-- Games List -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <template x-for="game in filteredGames" :key="game.id">
+            <div class="glass-panel rounded-xl overflow-hidden">
+                <!-- Game Header -->
+                <div class="bg-gray-900/50 p-4 border-b border-gray-700">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-bold text-gray-500 uppercase">Week <span x-text="game.week"></span> • Game <span x-text="game.game_number || ''"></span></span>
+                            <div class="text-lg font-bold text-white mt-1">
+                                <span x-text="game.team1"></span> vs <span x-text="game.team2"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Betting Options -->
+                <div class="p-4">
+                    <!-- Moneylines -->
+                    <div x-show="activeTab === 'all' || activeTab === 'moneyline'" class="mb-4">
+                        <div class="text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2">
+                            <span>Moneyline</span>
+                            <span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] font-semibold rounded border border-yellow-500/30">OFFICIAL</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button @click="addBet(game.id, game.team1, 'moneyline', game.team1_odds, null, game.team1 + ' to win')"
+                                    class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg transition text-left relative">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-white" x-text="game.team1"></span>
+                                    <span class="text-blue-400 font-mono" x-text="(game.team1_odds > 0 ? '+' : '') + game.team1_odds"></span>
+                                </div>
+                            </button>
+                            <button @click="addBet(game.id, game.team2, 'moneyline', game.team2_odds, null, game.team2 + ' to win')"
+                                    class="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg transition text-left relative">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-white" x-text="game.team2"></span>
+                                    <span class="text-blue-400 font-mono" x-text="(game.team2_odds > 0 ? '+' : '') + game.team2_odds"></span>
+                                </div>
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Matchup & Odds -->
-                    <div class="col-span-12 md:col-span-10 p-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-
-                            <!-- Team 1 -->
-                            <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-blue-500 cursor-pointer transition group"
-                                 @click="openBetModal({{ game.id }}, '{{ game.team1 }}', 'moneyline', -110)"> <!-- Placeholder odds -->
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-xl text-white">{{ game.team1 }}</span>
-                                    <span class="bg-gray-900 text-blue-400 font-mono px-2 py-1 rounded text-sm group-hover:bg-blue-900 group-hover:text-blue-200">-110</span>
+                    <!-- Spreads & Totals -->
+                    <div x-show="activeTab === 'all' || activeTab === 'spreads'" class="mb-4" x-data="{ expanded: false }">
+                        <button @click="expanded = !expanded" class="w-full text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between items-center hover:text-white">
+                            <span>Spreads & Totals</span>
+                            <i class="fas" :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="expanded">
+                            <template x-if="game.betting_lines_dict">
+                                <div class="space-y-3">
+                                    <!-- Spread -->
+                                    <div>
+                                        <div class="text-xs text-gray-500 mb-1 flex items-center gap-2">
+                                            <span>Spread</span>
+                                            <template x-if="game.betting_lines_dict && game.betting_lines_dict.spread && game.betting_lines_dict.spread.is_official">
+                                                <span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-[10px] font-semibold rounded border border-yellow-500/30">OFFICIAL</span>
+                                            </template>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button @click="addBet(game.id, game.betting_lines_dict.spread.favorite, 'spread', game.betting_lines_dict.spread.favorite_odds, game.betting_lines_dict.spread.value, game.betting_lines_dict.spread.favorite + ' -' + game.betting_lines_dict.spread.value)"
+                                                    class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm text-left">
+                                                <span class="text-white" x-text="game.betting_lines_dict.spread.favorite"></span>
+                                                <span class="text-blue-400 ml-2" x-text="'-' + game.betting_lines_dict.spread.value"></span>
+                                            </button>
+                                            <button @click="addBet(game.id, game.betting_lines_dict.spread.underdog, 'spread', game.betting_lines_dict.spread.underdog_odds, -game.betting_lines_dict.spread.value, game.betting_lines_dict.spread.underdog + ' +' + game.betting_lines_dict.spread.value)"
+                                                    class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm text-left">
+                                                <span class="text-white" x-text="game.betting_lines_dict.spread.underdog"></span>
+                                                <span class="text-blue-400 ml-2" x-text="'+' + game.betting_lines_dict.spread.value"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Total -->
+                                    <div>
+                                        <div class="text-xs text-gray-500 mb-1">Total</div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button @click="addBet(game.id, 'Over', 'total', -110, game.betting_lines_dict.total.value, 'Over ' + game.betting_lines_dict.total.value)"
+                                                    class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm">
+                                                <span class="text-white">Over </span>
+                                                <span class="text-blue-400" x-text="game.betting_lines_dict.total.value"></span>
+                                            </button>
+                                            <button @click="addBet(game.id, 'Under', 'total', -110, game.betting_lines_dict.total.value, 'Under ' + game.betting_lines_dict.total.value)"
+                                                    class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm">
+                                                <span class="text-white">Under </span>
+                                                <span class="text-blue-400" x-text="game.betting_lines_dict.total.value"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Team Totals -->
+                                    <div>
+                                        <div class="text-xs text-gray-500 mb-1">Team Totals</div>
+                                        <div class="space-y-2">
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <button @click="addBet(game.id, game.team1 + ' Over', 'team_total', -110, game.betting_lines_dict.team_totals.team1.value, game.team1 + ' Over ' + game.betting_lines_dict.team_totals.team1.value)"
+                                                        class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm text-xs">
+                                                    <span class="text-white" x-text="game.team1"></span> O <span class="text-blue-400" x-text="game.betting_lines_dict.team_totals.team1.value"></span>
+                                                </button>
+                                                <button @click="addBet(game.id, game.team1 + ' Under', 'team_total', -110, game.betting_lines_dict.team_totals.team1.value, game.team1 + ' Under ' + game.betting_lines_dict.team_totals.team1.value)"
+                                                        class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm text-xs">
+                                                    <span class="text-white" x-text="game.team1"></span> U <span class="text-blue-400" x-text="game.betting_lines_dict.team_totals.team1.value"></span>
+                                                </button>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <button @click="addBet(game.id, game.team2 + ' Over', 'team_total', -110, game.betting_lines_dict.team_totals.team2.value, game.team2 + ' Over ' + game.betting_lines_dict.team_totals.team2.value)"
+                                                        class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm text-xs">
+                                                    <span class="text-white" x-text="game.team2"></span> O <span class="text-blue-400" x-text="game.betting_lines_dict.team_totals.team2.value"></span>
+                                                </button>
+                                                <button @click="addBet(game.id, game.team2 + ' Under', 'team_total', -110, game.betting_lines_dict.team_totals.team2.value, game.team2 + ' Under ' + game.betting_lines_dict.team_totals.team2.value)"
+                                                        class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm text-xs">
+                                                    <span class="text-white" x-text="game.team2"></span> U <span class="text-blue-400" x-text="game.betting_lines_dict.team_totals.team2.value"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-
-                            <!-- Team 2 -->
-                            <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-blue-500 cursor-pointer transition group"
-                                 @click="openBetModal({{ game.id }}, '{{ game.team2 }}', 'moneyline', -110)"> <!-- Placeholder odds -->
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-xl text-white">{{ game.team2 }}</span>
-                                    <span class="bg-gray-900 text-blue-400 font-mono px-2 py-1 rounded text-sm group-hover:bg-blue-900 group-hover:text-blue-200">-110</span>
-                                </div>
-                            </div>
-
+                            </template>
                         </div>
-                        <div class="mt-4 text-center">
-                             <span class="text-xs text-gray-500 uppercase tracking-widest">Moneyline Bets Open</span>
+                    </div>
+
+                    <!-- Player Props -->
+                    <div x-show="activeTab === 'all' || activeTab === 'player_props'" class="mb-4" x-data="{ expanded: false }">
+                        <button @click="expanded = !expanded" class="w-full text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between items-center hover:text-white">
+                            <span>Player Props</span>
+                            <i class="fas" :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="expanded" class="space-y-4">
+                            <template x-if="game.betting_lines_dict && game.betting_lines_dict.player_props">
+                                <div>
+                                    <template x-for="(prop, key) in game.betting_lines_dict.player_props" :key="key">
+                                        <div class="mb-3 p-3 bg-gray-800 rounded">
+                                            <div class="text-sm font-bold text-white mb-2" x-text="prop.player"></div>
+                                            <div class="text-xs text-gray-400 mb-2" x-text="formatPropType(prop.prop_type) + ' ' + prop.line_value"></div>
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <button @click="addBet(game.id, prop.player + '_' + prop.prop_type + '_Over', 'player_prop', prop.over_odds, prop.line_value, prop.player + ' ' + formatPropType(prop.prop_type) + ' Over ' + prop.line_value)"
+                                                        class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-xs">
+                                                    Over <span class="text-blue-400" x-text="(prop.over_odds > 0 ? '+' : '') + prop.over_odds"></span>
+                                                </button>
+                                                <button @click="addBet(game.id, prop.player + '_' + prop.prop_type + '_Under', 'player_prop', prop.under_odds, prop.line_value, prop.player + ' ' + formatPropType(prop.prop_type) + ' Under ' + prop.line_value)"
+                                                        class="bg-gray-700 hover:bg-gray-600 p-2 rounded text-xs">
+                                                    Under <span class="text-blue-400" x-text="(prop.under_odds > 0 ? '+' : '') + prop.under_odds"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Team Props -->
+                    <div x-show="activeTab === 'all' || activeTab === 'team_props'" class="mb-4" x-data="{ expanded: false }">
+                        <button @click="expanded = !expanded" class="w-full text-xs font-bold text-gray-400 uppercase mb-2 flex justify-between items-center hover:text-white">
+                            <span>Team Props</span>
+                            <i class="fas" :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+                        <div x-show="expanded">
+                            <template x-if="game.betting_lines_dict">
+                                <div class="space-y-3">
+                                    <!-- Cascade -->
+                                    <div>
+                                        <div class="text-xs text-gray-500 mb-1">Will there be a Cascade?</div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <button @click="addBet(game.id, 'cascade_yes', 'team_prop', game.betting_lines_dict.cascade.yes_odds, null, 'Cascade Yes')"
+                                                    class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm">
+                                                Yes <span class="text-blue-400" x-text="(game.betting_lines_dict.cascade.yes_odds > 0 ? '+' : '') + game.betting_lines_dict.cascade.yes_odds"></span>
+                                            </button>
+                                            <button @click="addBet(game.id, 'cascade_no', 'team_prop', -200, null, 'Cascade No')"
+                                                    class="bg-gray-800 hover:bg-gray-700 p-2 rounded text-sm">
+                                                No <span class="text-blue-400">-200</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
             </div>
-            {% endfor %}
         </div>
-    {% else %}
-        <div class="text-center py-12 glass-panel rounded-xl text-gray-400">
-            <i class="fas fa-calendar-times text-4xl mb-3 opacity-50"></i>
-            <p>No upcoming games scheduled.</p>
-        </div>
-    {% endif %}
+    </template>
+    </div>
 
+    <!-- Empty State -->
+    <div x-show="filteredGames.length === 0" class="text-center py-12 glass-panel rounded-xl text-gray-400">
+        <i class="fas fa-calendar-times text-4xl mb-3 opacity-50"></i>
+        <p>No upcoming games scheduled.</p>
+    </div>
 </div>
+
+<script>
+function bettingApp() {
+    return {
+        activeTab: 'all',
+        userTokens: {% if user and user.tokens is not none %}{{ user.tokens }}{% else %}0{% endif %},
+        bettingSlip: [],
+        activeBetsCount: 0,  // Add this
+        totalWager: 100,
+        games: {% if games is not none %}{{ games | tojson | safe }}{% else %}[]{% endif %},
+
+        async init() {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:318',message:'bettingApp init entry',data:{games_count:this.games?this.games.length:0,userTokens:this.userTokens},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+            // Parse betting lines for each game
+            try {
+                this.games = this.games.map(game => {
+                    if (game.betting_lines) {
+                        try {
+                            game.betting_lines_dict = JSON.parse(game.betting_lines);
+                        } catch (e) {
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:323',message:'JSON parse error betting_lines',data:{game_id:game.id,error:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                            // #endregion
+                            game.betting_lines_dict = null;
+                        }
+                    } else {
+                        game.betting_lines_dict = null;
+                    }
+                    return game;
+                });
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:332',message:'bettingApp init success',data:{games_processed:this.games.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
+            } catch (e) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:318',message:'bettingApp init failed',data:{error:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
+                console.error('Error in bettingApp init:', e);
+            }
+            
+            // Load active bets count
+            await this.loadActiveBetsCount();
+        },
+        
+        async loadActiveBetsCount() {
+            try {
+                const response = await fetch('/api/my_bets');
+                const data = await response.json();
+                if (data.success) {
+                    this.activeBetsCount = data.total_bets || 0;
+                }
+            } catch (e) {
+                console.error('Error loading active bets count:', e);
+            }
+        },
+
+        get filteredGames() {
+            return this.games.filter(game => {
+                if (this.activeTab === 'all') return true;
+                // For now, show all games in each tab (filtering can be refined)
+                return true;
+            });
+        },
+
+        get singleBets() {
+            return this.bettingSlip.filter(bet => !bet.isParlay);
+        },
+
+        get parlayBets() {
+            return this.bettingSlip.filter(bet => bet.isParlay);
+        },
+
+        get parlayCombinedOdds() {
+            if (this.parlayBets.length < 2) return 0;
+            const odds = this.parlayBets.map(b => b.odds);
+            // Convert to probabilities, multiply, convert back
+            const probs = odds.map(o => o > 0 ? 100 / (o + 100) : Math.abs(o) / (Math.abs(o) + 100));
+            const combinedProb = probs.reduce((a, b) => a * b, 1);
+            if (combinedProb > 0.5) {
+                return Math.round(-100 * combinedProb / (1 - combinedProb) / 5) * 5;
+            } else {
+                return Math.round(100 * (1 - combinedProb) / combinedProb / 5) * 5;
+            }
+        },
+
+        get singleBetsPayout() {
+            return this.singleBets.reduce((sum, bet) => {
+                const profit = bet.odds > 0 ? 
+                    this.totalWager * (bet.odds / 100) : 
+                    this.totalWager * (100 / Math.abs(bet.odds));
+                return sum + this.totalWager + profit;
+            }, 0);
+        },
+
+        get parlayPayout() {
+            if (this.parlayBets.length < 2) return 0;
+            const profit = this.parlayCombinedOdds > 0 ?
+                this.totalWager * (this.parlayCombinedOdds / 100) :
+                this.totalWager * (100 / Math.abs(this.parlayCombinedOdds));
+            return this.totalWager + profit;
+        },
+
+        get totalPayout() {
+            return this.singleBetsPayout + this.parlayPayout;
+        },
+
+        addBet(gameId, selection, betType, odds, lineValue, description) {
+            const bet = {
+                gameId: gameId,
+                selection: selection,
+                betType: betType,
+                odds: odds,
+                lineValue: lineValue,
+                description: description,
+                amount: this.totalWager,
+                isParlay: false
+            };
+            this.bettingSlip.push(bet);
+        },
+
+        addToParlay(index) {
+            this.bettingSlip[index].isParlay = true;
+        },
+
+        removeBet(index) {
+            this.bettingSlip.splice(index, 1);
+        },
+
+        removeParlayBet(index) {
+            const parlayIndex = this.bettingSlip.findIndex((b, i) => b.isParlay && this.parlayBets.indexOf(b) === index);
+            if (parlayIndex !== -1) {
+                this.bettingSlip[parlayIndex].isParlay = false;
+            }
+        },
+
+        clearSlip() {
+            this.bettingSlip = [];
+        },
+
+        formatPropType(propType) {
+            const types = {
+                'points_ou': 'Points',
+                'runs_attempted_ou': 'Runs Attempted',
+                'throws_attempted_ou': 'Throws Attempted',
+                'kicks_attempted_ou': 'Kicks Attempted',
+                'runs_completed_ou': 'Runs Completed',
+                'throws_completed_ou': 'Throws Completed',
+                'kicks_completed_ou': 'Kicks Completed',
+                'cascades_ou': 'Cascades'
+            };
+            return types[propType] || propType;
+        },
+
+        async submitBets() {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:455',message:'submitBets entry',data:{totalWager:this.totalWager,userTokens:this.userTokens,bettingSlipLength:this.bettingSlip.length,singleBetsLength:this.singleBets.length,parlayBetsLength:this.parlayBets.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            if (this.totalWager > this.userTokens) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:456',message:'Validation failed: insufficient tokens',data:{totalWager:this.totalWager,userTokens:this.userTokens},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
+                alert('Insufficient tokens!');
+                return;
+            }
+
+            const hasParlay = this.parlayBets.length >= 2;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:461',message:'After validation, before fetch',data:{hasParlay:hasParlay,singleBetsLength:this.singleBets.length,parlayBetsLength:this.parlayBets.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
+            if (hasParlay) {
+                // Submit parlay
+                const parlayData = {
+                    is_parlay: true,
+                    bets: this.parlayBets.map(bet => ({
+                        game_id: bet.gameId,
+                        bet_type: bet.betType,
+                        selection: bet.selection,
+                        odds: bet.odds,
+                        line_value: bet.lineValue
+                    })),
+                    amount: this.totalWager
+                };
+
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:477',message:'Before parlay fetch',data:{parlayData:parlayData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
+                try {
+                    const response = await fetch('/api/place_bet', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(parlayData)
+                    });
+
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:482',message:'Parlay fetch response received',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                    // #endregion
+
+                    const result = await response.json();
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:483',message:'Parlay fetch result parsed',data:{success:result.success,message:result.message,new_balance:result.new_balance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                    // #endregion
+                    if (result.success) {
+                        this.userTokens = result.new_balance;
+                        this.bettingSlip = [];
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:485',message:'Parlay success, before reload',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
+                        alert('Parlay bet placed successfully!');
+                        window.location.reload();
+                    } else {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:490',message:'Parlay failed',data:{message:result.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                        // #endregion
+                        alert(result.message);
+                    }
+                } catch (error) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:492',message:'Parlay fetch exception',data:{error:String(error),stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
+                    console.error('Error submitting parlay:', error);
+                    alert('Error submitting parlay bet');
+                }
+            }
+
+            // Submit single bets
+            for (const bet of this.singleBets) {
+                const betData = {
+                    is_parlay: false,
+                    game_id: bet.gameId,
+                    bet_type: bet.betType,
+                    selection: bet.selection,
+                    odds: bet.odds,
+                    line_value: bet.lineValue,
+                    amount: this.totalWager
+                };
+
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:506',message:'Before single bet fetch',data:{betData:betData,loopIndex:this.singleBets.indexOf(bet)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
+                try {
+                    const response = await fetch('/api/place_bet', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(betData)
+                    });
+
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:512',message:'Single bet fetch response received',data:{status:response.status,statusText:response.statusText,ok:response.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                    // #endregion
+
+                    const result = await response.json();
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:513',message:'Single bet fetch result parsed',data:{success:result.success,message:result.message,new_balance:result.new_balance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                    // #endregion
+                    if (result.success) {
+                        this.userTokens = result.new_balance;
+                    } else {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:516',message:'Single bet failed',data:{message:result.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                        // #endregion
+                        alert(result.message);
+                        return;
+                    }
+                } catch (error) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:519',message:'Single bet fetch exception',data:{error:String(error),stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
+                    console.error('Error submitting single bet:', error);
+                    alert('Error submitting bet');
+                    return;
+                }
+            }
+
+            if (this.singleBets.length > 0 && !hasParlay) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:521',message:'Single bets success, before reload',data:{singleBetsLength:this.singleBets.length,hasParlay:hasParlay},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
+                this.bettingSlip = [];
+                alert('Bets placed successfully!');
+                window.location.reload();
+            }
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/19d746c0-f552-4055-8ba1-6eced58adaf6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'betting.html:526',message:'submitBets exit',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+        }
+    }
+}
+</script>
 {% endblock %}

@@ -5,9 +5,9 @@ import base64
 from io import BytesIO
 from PIL import Image
 
-# Try to import the old SDK (google.generativeai)
+# Try to import the new SDK (google.genai)
 try:
-    import google.generativeai as genai
+    from google import genai
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -182,7 +182,7 @@ def image_to_base64(image):
     return img_str
 
 
-def generate_game_image_with_gemini(game_result, filename, game_type="game", week=None, game_number=None, is_champion=False):
+def generate_game_image_with_gemini(game_result, filename, game_type="game", week=None, game_number=None, is_champion=False, season_folder=None):
     """
     Generate a game image using Gemini API with team logos as context.
     
@@ -193,17 +193,35 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
         week: Week number (optional)
         game_number: Game number (optional)
         is_champion: If True, generate a trophy victory image instead of action scene
+        season_folder: Optional season folder name (e.g., "season_3"). If provided, saves to season folder instead of root directory.
     
     Returns:
         True if successful, False otherwise
     """
     try:
+        # Determine save path based on season_folder parameter
+        if season_folder:
+            # Calculate STATIC_ROOT path (same way as webapp_bridge.py)
+            # Get the directory containing this file, go up to project root, then to webapp/static
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            static_root = os.path.join(project_root, 'webapp', 'static')
+            season_path = os.path.join(static_root, season_folder)
+            os.makedirs(season_path, exist_ok=True)
+            save_path = os.path.join(season_path, filename)
+        else:
+            # Save to root directory (backward compatibility)
+            save_path = filename
+        
         # Load API key
         api_key = load_gemini_api_key()
         
-        # Configure old SDK if available
-        if GENAI_AVAILABLE:
-            genai.configure(api_key=api_key)
+        # Initialize new SDK client if available
+        if not GENAI_AVAILABLE:
+            print("Error: google.genai SDK not available. Please install with: pip install google-genai")
+            return False
+        
+        client = genai.Client(api_key=api_key)
         
         # Get teams and determine winner
         team1 = game_result['team1']
@@ -304,14 +322,11 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
                 )
         
         # Use Gemini API for image generation
-        # Try the new SDK approach first (google.genai), then fallback to old SDK, then REST
+        # Try the new SDK approach first (google.genai), then fallback to REST API
         try:
-            # Method 1: Try new SDK (google.genai) if available
+            # Method 1: Use new SDK (google.genai)
             try:
-                from google import genai as new_genai
                 from google.genai import types
-                
-                client = new_genai.Client(api_key=api_key)
                 
                 # Prepare content parts - convert PIL Images to proper format
                 # The new SDK may need images in a specific format
@@ -374,8 +389,8 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
                                         img = Image.open(BytesIO(image_data))
                                     else:
                                         continue
-                                    img.save(filename)
-                                    print(f"✓ Generated image with Gemini (new SDK): {filename}")
+                                    img.save(save_path)
+                                    print(f"✓ Generated image with Gemini (new SDK): {save_path}")
                                     print(f"  Prompt used: {final_prompt[:150]}...")
                                     return True
                                 except Exception as img_error:
@@ -383,74 +398,14 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
                                     continue
                 
             except ImportError:
-                # New SDK not available, try old SDK
+                # New SDK types not available, try without types
                 pass
             except Exception as e:
                 print(f"New SDK approach failed: {e}")
-                # Fall through to old SDK
+                import traceback
+                traceback.print_exc()
             
-            # Method 2: Try old SDK (google.generativeai)
-            if GENAI_AVAILABLE:
-                try:
-                    model = genai.GenerativeModel('gemini-2.5-flash-image')
-                    
-                    # Prepare content parts - old SDK accepts PIL Images directly
-                    # But we need to ensure they're in RGB mode
-                    content_parts = [final_prompt]
-                    
-                    if is_champion:
-                        # For champion trophy, only use winner logo
-                        if winner_logo:
-                            # Convert RGBA to RGB if needed
-                            if winner_logo.mode == 'RGBA':
-                                rgb_logo = Image.new('RGB', winner_logo.size, (255, 255, 255))
-                                rgb_logo.paste(winner_logo, mask=winner_logo.split()[3])
-                                content_parts.append(rgb_logo)
-                            else:
-                                content_parts.append(winner_logo)
-                    elif winner_logo and loser_logo:
-                        # Convert PIL Images to RGB if needed
-                        for logo in [winner_logo, loser_logo]:
-                            if logo.mode == 'RGBA':
-                                rgb_logo = Image.new('RGB', logo.size, (255, 255, 255))
-                                rgb_logo.paste(logo, mask=logo.split()[3])
-                                content_parts.append(rgb_logo)
-                            else:
-                                content_parts.append(logo)
-                    
-                    response = model.generate_content(content_parts)
-                    
-                    # Check if response has image
-                    if hasattr(response, 'candidates') and response.candidates:
-                        candidate = response.candidates[0]
-                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                            for part in candidate.content.parts:
-                                # Check for inline_data with data attribute
-                                if hasattr(part, 'inline_data') and part.inline_data:
-                                    if hasattr(part.inline_data, 'data'):
-                                        # Decode and save image
-                                        image_data = part.inline_data.data
-                                        if isinstance(image_data, str):
-                                            # Base64 string
-                                            image_data = base64.b64decode(image_data)
-                                        elif isinstance(image_data, bytes):
-                                            # Already bytes
-                                            pass
-                                        else:
-                                            continue
-                                        img = Image.open(BytesIO(image_data))
-                                        img.save(filename)
-                                        print(f"✓ Generated image with Gemini (old SDK): {filename}")
-                                        print(f"  Prompt used: {final_prompt[:150]}...")
-                                        return True
-                except Exception as e:
-                    print(f"Old SDK approach failed: {e}")
-                    import traceback
-                    traceback.print_exc()
-            else:
-                print("Old SDK (google.generativeai) not available, skipping...")
-            
-            # Method 3: Fallback to REST API
+            # Method 2: Fallback to REST API
             try:
                 import requests
                 
@@ -523,14 +478,21 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
                                 # Skip text parts, only look for images
                                 if 'text' in part:
                                     continue
-                                if 'inline_data' in part and 'data' in part['inline_data']:
+                                # Check for both camelCase (inlineData) and snake_case (inline_data)
+                                inline_data_key = None
+                                if 'inlineData' in part:
+                                    inline_data_key = 'inlineData'
+                                elif 'inline_data' in part:
+                                    inline_data_key = 'inline_data'
+                                
+                                if inline_data_key and 'data' in part[inline_data_key]:
                                     try:
                                         # Decode base64 image
-                                        image_data_str = part['inline_data']['data']
+                                        image_data_str = part[inline_data_key]['data']
                                         image_data = base64.b64decode(image_data_str)
                                         img = Image.open(BytesIO(image_data))
-                                        img.save(filename)
-                                        print(f"✓ Generated image with Gemini (REST API): {filename}")
+                                        img.save(save_path)
+                                        print(f"✓ Generated image with Gemini (REST API): {save_path}")
                                         print(f"  Prompt used: {final_prompt[:150]}...")
                                         return True
                                     except Exception as img_error:

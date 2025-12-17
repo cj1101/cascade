@@ -74,23 +74,63 @@ def get_initial_teams():
         player_names_for_team = all_player_names[name_index:name_index + 7]
         name_index += 7
         
-        # Assign rankings 1-7 (1 is best)
-        rankings = list(range(1, 8))
-        random.shuffle(rankings)
+        # All players start with equal ranking (4.0)
+        # Rankings will be updated dynamically based on performance
         
         # Assign roles: 3 Anchors, 4 Runners
         roles = ['Anchor'] * 3 + ['Runner'] * 4
         random.shuffle(roles)
         
-        # Assign best stats randomly
-        best_stats = ['Run', 'Throw', 'Kick']
+        # Advantage types and their possible values
+        advantage_types = ['run_boost', 'throw_boost', 'kick_boost', 'cascade_boost', 'block_boost']
         
         for i, player_name in enumerate(player_names_for_team):
+            role = roles[i]
+            # Assign species based on role
+            species = 'Human' if role == 'Anchor' else 'Vif'
+            
+            # Assign best_stat based on species constraints
+            # Runners (Vif): Cannot have Throw (can only be Run or Kick)
+            # Anchors (Human): Cannot have Run (can only be Throw or Kick)
+            if species == 'Vif':
+                # Runner: can only have Run or Kick
+                best_stat = random.choice(['Run', 'Kick'])
+            else:
+                # Human: can only have Throw or Kick
+                best_stat = random.choice(['Throw', 'Kick'])
+            
+            # Assign unique advantage
+            advantage_type = random.choice(advantage_types)
+            if advantage_type in ['run_boost', 'throw_boost', 'kick_boost']:
+                advantage_value = random.uniform(0.05, 0.15)  # 5-15% boost
+            elif advantage_type == 'cascade_boost':
+                advantage_value = random.uniform(0.02, 0.05)  # 2-5% boost
+            else:  # block_boost
+                advantage_value = random.uniform(0.05, 0.10)  # 5-10% boost
+            
+            # Generate unique player ID: team_index * 100 + player_index
+            # This ensures uniqueness across all teams
+            player_id = len(teams) * 100 + i
+            
             player = {
+                'id': player_id,
                 'name': player_name,
-                'ranking': rankings[i],
-                'best_stat': random.choice(best_stats),
-                'role': roles[i]
+                'ranking': 4.0,  # All players start equal
+                'best_stat': best_stat,
+                'role': role,
+                'species': species,
+                'momentum': 0,  # Starts at 0, ranges -2 to +2
+                'injured': False,  # Injury status
+                'advantage': {
+                    'type': advantage_type,
+                    'value': advantage_value
+                },
+                'season_stats': {
+                    'total_points': 0,
+                    'total_attempts': 0,
+                    'total_completions': 0,
+                    'total_yards': 0
+                }
             }
             team.players.append(player)
         
@@ -130,7 +170,45 @@ def load_game_state():
             
             # Load player data if available (backward compatibility)
             if 'players' in team_data:
-                team.players = team_data['players']
+                players = team_data['players']
+                # Ensure all players have new fields (backward compatibility)
+                for i, player in enumerate(players):
+                    # Generate unique ID if missing (backward compatibility)
+                    if 'id' not in player:
+                        # Use team index and player index to create unique ID
+                        team_index = len(teams)
+                        player['id'] = team_index * 100 + i
+                    
+                    if 'ranking' not in player or isinstance(player.get('ranking'), int):
+                        # Convert old integer ranking to float, or set to 4.0 if missing
+                        player['ranking'] = 4.0
+                    if 'momentum' not in player:
+                        player['momentum'] = 0
+                    if 'species' not in player:
+                        # Infer species from role for backward compatibility
+                        role = player.get('role', 'Runner')
+                        player['species'] = 'Human' if role == 'Anchor' else 'Vif'
+                    if 'injured' not in player:
+                        player['injured'] = False
+                    if 'advantage' not in player:
+                        # Generate random advantage for backward compatibility
+                        advantage_types = ['run_boost', 'throw_boost', 'kick_boost', 'cascade_boost', 'block_boost']
+                        advantage_type = random.choice(advantage_types)
+                        if advantage_type in ['run_boost', 'throw_boost', 'kick_boost']:
+                            advantage_value = random.uniform(0.05, 0.15)
+                        elif advantage_type == 'cascade_boost':
+                            advantage_value = random.uniform(0.02, 0.05)
+                        else:
+                            advantage_value = random.uniform(0.05, 0.10)
+                        player['advantage'] = {'type': advantage_type, 'value': advantage_value}
+                    if 'season_stats' not in player:
+                        player['season_stats'] = {
+                            'total_points': 0,
+                            'total_attempts': 0,
+                            'total_completions': 0,
+                            'total_yards': 0
+                        }
+                team.players = players
             else:
                 # Generate default players for backward compatibility
                 team.players = _generate_default_players(team.name)
@@ -167,19 +245,61 @@ def _generate_default_players(team_name):
     team_hash = hash(team_name) % (len(all_player_names) - 6)
     player_names = all_player_names[team_hash:team_hash + 7]
     
-    rankings = list(range(1, 8))
-    random.shuffle(rankings)
     roles = ['Anchor'] * 3 + ['Runner'] * 4
     random.shuffle(roles)
-    best_stats = ['Run', 'Throw', 'Kick']
+    
+    # Advantage types and their possible values
+    advantage_types = ['run_boost', 'throw_boost', 'kick_boost', 'cascade_boost', 'block_boost']
     
     players = []
     for i, player_name in enumerate(player_names):
+        role = roles[i]
+        # Assign species based on role
+        species = 'Human' if role == 'Anchor' else 'Vif'
+        
+        # Assign best_stat based on species constraints
+        # Runners (Vif): Cannot have Throw (can only be Run or Kick)
+        # Anchors (Human): Cannot have Run (can only be Throw or Kick)
+        if species == 'Vif':
+            # Runner: can only have Run or Kick
+            best_stat = random.choice(['Run', 'Kick'])
+        else:
+            # Human: can only have Throw or Kick
+            best_stat = random.choice(['Throw', 'Kick'])
+        
+        # Assign unique advantage
+        advantage_type = random.choice(advantage_types)
+        if advantage_type in ['run_boost', 'throw_boost', 'kick_boost']:
+            advantage_value = random.uniform(0.05, 0.15)  # 5-15% boost
+        elif advantage_type == 'cascade_boost':
+            advantage_value = random.uniform(0.02, 0.05)  # 2-5% boost
+        else:  # block_boost
+            advantage_value = random.uniform(0.05, 0.10)  # 5-10% boost
+        
+        # Generate unique player ID based on team name hash and player index
+        # Use hash of team name to get a base, then add player index
+        team_base = abs(hash(team_name)) % 10000
+        player_id = team_base * 100 + i
+        
         player = {
+            'id': player_id,
             'name': player_name,
-            'ranking': rankings[i],
-            'best_stat': random.choice(best_stats),
-            'role': roles[i]
+            'ranking': 4.0,  # All players start equal
+            'best_stat': best_stat,
+            'role': role,
+            'species': species,
+            'momentum': 0,  # Starts at 0, ranges -2 to +2
+            'injured': False,  # Injury status
+            'advantage': {
+                'type': advantage_type,
+                'value': advantage_value
+            },
+            'season_stats': {
+                'total_points': 0,
+                'total_attempts': 0,
+                'total_completions': 0,
+                'total_yards': 0
+            }
         }
         players.append(player)
     

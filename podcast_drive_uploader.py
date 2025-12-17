@@ -1,6 +1,7 @@
 """Google Drive Uploader for Podcast Audio Files"""
 import os
 import logging
+import re
 from pathlib import Path
 
 # Try to import scheduler for logger, fallback to basic logging
@@ -283,11 +284,15 @@ def upload_all_podcast_files(week, output_dir="podcasts"):
         if os.path.exists(combined_podcast):
             podcast_files.append(combined_podcast)
         
-        # Individual game files
-        for game_num in range(1, 5):  # Typically 4 games per week
-            game_file = os.path.join(output_dir, f"week_{week}_game_{game_num}.mp3")
-            if os.path.exists(game_file):
-                podcast_files.append(game_file)
+        # Individual game files - support both old format (week_X_game_Y.mp3) and new format (week_X_game_Y_team1_vs_team2.mp3)
+        if os.path.exists(output_dir):
+            # Pattern to match: week_{week}_game_{game_num}.mp3 or week_{week}_game_{game_num}_*_vs_*.mp3
+            pattern = re.compile(rf'^week_{week}_game_\d+(?:_[^_]+_vs_[^_]+)?\.mp3$')
+            for filename in os.listdir(output_dir):
+                if pattern.match(filename):
+                    file_path = os.path.join(output_dir, filename)
+                    if os.path.isfile(file_path):
+                        podcast_files.append(file_path)
         
         if not podcast_files:
             logger.warning(f"No podcast files found for Week {week}")

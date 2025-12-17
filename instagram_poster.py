@@ -4,6 +4,8 @@ import os
 import time
 import config
 import json
+import random
+import re
 from typing import List, Optional, Tuple
 from datetime import datetime, timedelta
 
@@ -17,6 +19,108 @@ except ImportError:
 
 # Token cache file to store token and expiration info
 TOKEN_CACHE_FILE = os.path.join(os.path.dirname(__file__), '.instagram_token_cache.json')
+
+
+def sort_image_pairs_by_game_number(image_paths: List[str]) -> List[str]:
+    """
+    Sort image pairs (scoreboard + gemini) by game number while ensuring
+    each scoreboard always appears before its corresponding gemini image.
+    
+    Args:
+        image_paths: List of image file paths
+        
+    Returns:
+        List of image paths sorted by game number (ascending)
+    """
+    if not image_paths or len(image_paths) <= 1:
+        return image_paths
+    
+    # Extract just the filename from each path
+    def get_filename(path: str) -> str:
+        return os.path.basename(path)
+    
+    def extract_game_number(game_id: str) -> int:
+        """Extract game number from game_id (e.g., 'week_1_game_2' -> 2)"""
+        match = re.search(r'game_(\d+)', game_id)
+        if match:
+            return int(match.group(1))
+        # If no game number found, return a large number to sort to end
+        return 9999
+    
+    # Group images by their game identifier
+    # Pattern: week_X_game_Y or tournament_TYPE_game_Y
+    # We'll extract the base identifier (everything before _gemini or the full name)
+    image_groups = {}  # Maps game_id -> {'scoreboard': path, 'gemini': path or None, 'game_num': int}
+    unpaired_images = []  # Images that don't match expected patterns
+    
+    for image_path in image_paths:
+        filename = get_filename(image_path)
+        
+        # Check if this is a gemini image
+        if '_gemini' in filename:
+            # Extract game identifier by removing _gemini and extension
+            # e.g., "week_1_game_1_gemini.png" -> "week_1_game_1"
+            game_id = filename.replace('_gemini.png', '').replace('_gemini.jpg', '')
+            game_id = game_id.replace('.png', '').replace('.jpg', '')
+            
+            if game_id not in image_groups:
+                image_groups[game_id] = {'scoreboard': None, 'gemini': None, 'game_num': extract_game_number(game_id)}
+            image_groups[game_id]['gemini'] = image_path
+        else:
+            # This is a scoreboard image - extract game identifier
+            # e.g., "week_1_game_1.png" -> "week_1_game_1"
+            game_id = filename.replace('.png', '').replace('.jpg', '')
+            
+            # Check if there's a corresponding gemini image
+            gemini_filename = game_id + '_gemini.png'
+            has_gemini = any(get_filename(p) == gemini_filename for p in image_paths)
+            
+            if has_gemini:
+                # This scoreboard has a gemini pair
+                if game_id not in image_groups:
+                    image_groups[game_id] = {'scoreboard': None, 'gemini': None, 'game_num': extract_game_number(game_id)}
+                image_groups[game_id]['scoreboard'] = image_path
+            else:
+                # Scoreboard without gemini - treat as unpaired
+                unpaired_images.append(image_path)
+    
+    # Build list of pairs (scoreboard, gemini) or single items with game numbers
+    pairs_list = []
+    
+    # Add complete pairs (scoreboard + gemini) and scoreboards without gemini
+    for game_id, group in image_groups.items():
+        if group['scoreboard'] and group['gemini']:
+            # Complete pair: scoreboard first, then gemini
+            pairs_list.append((group['game_num'], [group['scoreboard'], group['gemini']]))
+        elif group['scoreboard']:
+            # Scoreboard without gemini
+            pairs_list.append((group['game_num'], [group['scoreboard']]))
+        elif group['gemini']:
+            # Gemini without scoreboard (shouldn't happen normally, but handle it)
+            pairs_list.append((group['game_num'], [group['gemini']]))
+    
+    # Add unpaired images as single-item pairs (sort to end)
+    for unpaired in unpaired_images:
+        pairs_list.append((9999, [unpaired]))
+    
+    # Sort pairs by game number (ascending)
+    pairs_list.sort(key=lambda x: x[0])
+    
+    # Flatten the pairs back into a single list
+    sorted_paths = []
+    for _, pair in pairs_list:
+        sorted_paths.extend(pair)
+    
+    return sorted_paths
+
+
+# Keep old function name for backward compatibility (deprecated)
+def randomize_image_pairs(image_paths: List[str]) -> List[str]:
+    """
+    DEPRECATED: Use sort_image_pairs_by_game_number() instead.
+    This function now sorts by game number instead of randomizing.
+    """
+    return sort_image_pairs_by_game_number(image_paths)
 
 
 def _refresh_access_token(current_token: str) -> Optional[str]:
@@ -838,6 +942,102 @@ def _post_carousel(image_paths: List[str], caption: str, access_token: str, acco
         return False
 
 
+def post_story_to_instagram(image_path: str, access_token: Optional[str] = None, 
+                            instagram_account_id: Optional[str] = None):
+    """
+    Post a single image to Instagram Stories using Graph API.
+    
+    Args:
+        image_path: Path to the image file (must be 9:16 aspect ratio, 1080x1920 recommended)
+        access_token: Instagram Graph API access token (uses config if not provided)
+        instagram_account_id: Your Instagram Business Account ID (uses config if not provided)
+        
+    Returns:
+        bool: True if posting successful, False otherwise
+    """
+    # Get account ID from parameters, config, or environment
+    if not instagram_account_id:
+        instagram_account_id = getattr(config, 'INSTAGRAM_ACCOUNT_ID', None)
+        if not instagram_account_id:
+            instagram_account_id = os.getenv('INSTAGRAM_ACCOUNT_ID') or os.getenv('CASCADIA_ACCOUNT_ID')
+    
+    if not instagram_account_id:
+        logger.warning("⚠️  Instagram Graph API account ID not configured")
+        logger.warning("   Please set INSTAGRAM_ACCOUNT_ID or CASCADIA_ACCOUNT_ID in .env file")
+        return False
+    
+    # Get and validate/refresh access token
+    access_token = _get_valid_token(access_token)
+    
+    if not access_token:
+        logger.warning("⚠️  Instagram Graph API access token not configured or invalid")
+        logger.warning("   Please set INSTAGRAM_ACCESS_TOKEN or CASCADIA_ACCESS_TOKEN in .env file")
+        return False
+    
+    if not os.path.exists(image_path):
+        logger.error(f"❌ Image file not found: {image_path}")
+        return False
+    
+    try:
+        # Step 1: Upload image to Imgur to get a public URL
+        logger.info("Uploading Stories image to temporary storage (Imgur)...")
+        image_url = _upload_image_to_imgur(image_path)
+        
+        if not image_url:
+            logger.error(f"❌ Could not upload Stories image to Imgur")
+            return False
+        
+        # Step 2: Create Stories media container
+        url = f"https://graph.facebook.com/v21.0/{instagram_account_id}/media"
+        params = {
+            'image_url': image_url,
+            'media_type': 'STORIES',
+            'access_token': access_token
+        }
+        
+        logger.info("Creating Stories media container...")
+        response = requests.post(url, params=params)
+        
+        if response.status_code != 200:
+            error_data = response.json() if response.content else {}
+            logger.error(f"❌ Error creating Stories media container: {error_data}")
+            return False
+        
+        creation_id = response.json().get('id')
+        if not creation_id:
+            logger.error(f"❌ No creation ID returned for Stories: {response.json()}")
+            return False
+        
+        # Step 3: Publish the Stories media
+        url = f"https://graph.facebook.com/v21.0/{instagram_account_id}/media_publish"
+        params = {
+            'creation_id': creation_id,
+            'access_token': access_token
+        }
+        
+        logger.info("Publishing to Instagram Stories...")
+        response = requests.post(url, params=params)
+        
+        if response.status_code == 200:
+            result = response.json()
+            story_id = result.get('id', 'unknown')
+            logger.info(f"✓ Successfully posted to Instagram Stories! (Story ID: {story_id})")
+            return True
+        else:
+            error_data = response.json() if response.content else {}
+            logger.error(f"❌ Error publishing Stories: {error_data}")
+            return False
+            
+    except FileNotFoundError:
+        logger.error(f"❌ Image file not found: {image_path}")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Unexpected error during Stories post: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
 def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None, 
                        initial_teams=None, game_results_by_week=None, driver=None):
     """
@@ -899,11 +1099,14 @@ def post_images_hourly(all_images_by_week, teams=None, upcoming_schedule=None,
         
         caption = "\n".join(caption_parts)
         
+        # Sort image order by game number (keeping scoreboard before gemini pairs)
+        randomized_images = sort_image_pairs_by_game_number(images)
+        
         # Post all images for this week as a single carousel/gallery post
-        logger.debug(f"About to post Week {week} with {len(images)} images")
-        logger.debug(f"Image paths: {images}")
+        logger.debug(f"About to post Week {week} with {len(randomized_images)} images")
+        logger.debug(f"Image paths: {randomized_images}")
         logger.debug(f"Caption preview: {caption[:200]}...")
-        success = post_to_instagram(images, caption)
+        success = post_to_instagram(randomized_images, caption)
         
         if not success:
             logger.warning(f"❌ Warning: Failed to post Week {week} images")

@@ -6,6 +6,7 @@
     <title>Cascade Game Simulator - Season Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
@@ -21,29 +22,77 @@
         .neon-text {
             text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
         }
+        .cascade-wordmark {
+            background: linear-gradient(90deg, #22d3ee 0%, #38bdf8 45%, #2dd4bf 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .cascade-watermark {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.08;
+            filter: saturate(1.05);
+        }
+        .cascade-watermark img {
+            width: clamp(320px, 70vmin, 900px);
+            height: auto;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
+    <!-- Watermark background -->
+    <div class="cascade-watermark" aria-hidden="true">
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="" loading="lazy">
+    </div>
     <!-- Navbar -->
     <nav class="glass-panel border-b border-gray-700 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <div class="flex items-center">
-                    <a href="{{ url_for('index') }}" class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 neon-text">
-                        <i class="fas fa-cube mr-2"></i>CASCADE
+                    <a href="{{ url_for('index') }}" class="text-2xl font-bold neon-text flex items-center gap-3">
+                        <img src="{{ url_for('static', filename='logo.svg') }}" alt="Cascade" class="h-10 w-10 object-contain" style="max-height: 40px;" loading="eager">
+                        <span class="cascade-wordmark tracking-wide">CASCADE</span>
                     </a>
                     <div class="hidden md:block ml-10 flex items-baseline space-x-4">
                         <a href="{{ url_for('index') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                         <a href="{{ url_for('betting') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium text-yellow-400">
                             <i class="fas fa-coins mr-1"></i> Sportsbook
                         </a>
+                        <a href="{{ url_for('analytics') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium text-blue-400">
+                            <i class="fas fa-chart-bar mr-1"></i> Analytics
+                        </a>
+                        <a href="{{ url_for('teams') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium text-green-400">
+                            <i class="fas fa-users mr-1"></i> Teams
+                        </a>
+                        <a href="{{ url_for('franchise_history') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium text-yellow-400">
+                            <i class="fas fa-trophy mr-1"></i> Franchise History
+                        </a>
+                        <a href="{{ url_for('podcasts') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium text-purple-400">
+                            <i class="fas fa-podcast mr-1"></i> Podcasts
+                        </a>
                         <a href="{{ url_for('leaderboard') }}" class="hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium">Leaderboard</a>
                     </div>
                 </div>
-                <div>
+                <div class="flex items-center space-x-4">
+                    <!-- Countdown Timer -->
+                    <div id="countdown-timer" class="text-sm font-mono text-blue-400">
+                        <i class="fas fa-clock mr-1"></i>
+                        <span id="countdown-text">Loading...</span>
+                    </div>
+                    
                     {% if current_user.is_authenticated %}
                         <div class="flex items-center space-x-4">
                             <span class="text-yellow-400 font-bold"><i class="fas fa-coins"></i> {{ current_user.tokens }}</span>
+                            <span class="text-gray-400">|</span>
+                            <a href="{{ url_for('account') }}" class="text-sm text-blue-400 hover:text-blue-300 font-medium">
+                                <i class="fas fa-user-circle mr-1"></i>Account
+                            </a>
                             <span class="text-gray-400">|</span>
                             <span class="font-semibold">{{ current_user.username }}</span>
                             <a href="{{ url_for('logout') }}" class="text-sm text-red-400 hover:text-red-300">Logout</a>
@@ -58,8 +107,26 @@
         </div>
     </nav>
 
+    <!-- Simulation Overlay -->
+    <div id="simulation-overlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center" style="background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); pointer-events: auto;">
+        <div class="text-center px-8">
+            <div class="mb-6">
+                <i class="fas fa-cog fa-spin text-6xl text-blue-400 mb-4"></i>
+            </div>
+            <h2 id="overlay-message" class="text-3xl font-bold text-white mb-4 neon-text"></h2>
+            <p class="text-gray-300 text-lg mb-2">Please wait while we process the results...</p>
+            <div id="eta-display" class="mt-4">
+                <div id="phase-name" class="text-blue-400 text-lg font-semibold mb-2"></div>
+                <div id="progress-bar-container" class="w-64 mx-auto bg-gray-700 rounded-full h-2 mb-2">
+                    <div id="progress-bar" class="bg-yellow-400 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div id="eta-countdown" class="text-yellow-400 text-xl font-mono font-bold"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Content -->
-    <main class="flex-grow container mx-auto px-4 py-8">
+    <main id="main-content" class="relative z-10 flex-grow container mx-auto px-4 py-8">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 <div class="mb-6 space-y-2">
@@ -76,10 +143,353 @@
     </main>
 
     <!-- Footer -->
-    <footer class="glass-panel border-t border-gray-700 py-6 mt-8">
+    <footer class="relative z-10 glass-panel border-t border-gray-700 py-6 mt-8">
         <div class="max-w-7xl mx-auto px-4 text-center text-gray-400 text-sm">
-            <p>&copy; 2024 Cascade Simulation League. "The Future of Sports is Simulated."</p>
+            <p>&copy; 2025 Crow's Eye. "The Future of Sports is Simulated."</p>
         </div>
     </footer>
+
+    <script>
+        // Simulation status polling and overlay management
+        let simulationStatusInterval = null;
+        let countdownInterval = null;
+
+        function formatCountdown(seconds) {
+            if (seconds === null || seconds === undefined || seconds < 0) {
+                return 'No upcoming simulation';
+            }
+            if (seconds === 0) {
+                return 'Starting now...';
+            }
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (hours > 0) {
+                return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+            return `${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function calculateCountdownFromTime() {
+            if (!nextSimulationTime) return null;
+            // Use user's local time for accurate countdown in their timezone
+            const now = new Date();
+            // nextSimulationTime is already a Date object (parsed from UTC ISO string with 'Z')
+            // JavaScript Date objects are stored in UTC internally, so subtraction works correctly
+            const diff = Math.floor((nextSimulationTime - now) / 1000);
+            return diff > 0 ? diff : 0;
+        }
+
+        function updateCountdown(seconds) {
+            const countdownText = document.getElementById('countdown-text');
+            if (countdownText) {
+                if (seconds === null || seconds === undefined || seconds < 0) {
+                    countdownText.textContent = 'No upcoming simulation';
+                } else if (seconds === 0) {
+                    countdownText.textContent = 'Starting now...';
+                } else {
+                    const timeStr = formatCountdown(seconds);
+                    countdownText.textContent = `Next: Week ${(currentWeek || 0) + 1} in ${timeStr}`;
+                }
+            }
+        }
+
+        let currentWeek = 0;
+        let nextSimulationTime = null; // Date object or null
+        let isRunning = false;
+        let etaSeconds = null;
+        let etaInterval = null;
+        let smoothedRate = null; // For exponential moving average
+        let lastETARefresh = null; // Track when we last got ETA from API
+        let etasSinceRefresh = 0; // Track how many times we've decremented since last refresh
+
+        function formatETA(seconds) {
+            if (seconds === null || seconds === undefined || seconds < 0) {
+                return 'Calculating...';
+            }
+            if (seconds < 60) {
+                return 'Less than a minute';
+            }
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (hours > 0) {
+                return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+            return `${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function updateETA() {
+            const etaDisplay = document.getElementById('eta-display');
+            const phaseName = document.getElementById('phase-name');
+            const progressBar = document.getElementById('progress-bar');
+            const etaCountdown = document.getElementById('eta-countdown');
+            
+            if (!etaDisplay || !isRunning) {
+                if (etaDisplay) {
+                    etaDisplay.style.display = 'none';
+                }
+                return;
+            }
+            
+            etaDisplay.style.display = 'block';
+            
+            // Update ETA countdown
+            if (etaSeconds !== null && etaSeconds !== undefined) {
+                // Only decrement if we haven't decremented too many times since last refresh
+                // This prevents the countdown from getting stuck at "Less than a minute"
+                // If we've decremented more than the current value, it means we need a refresh
+                if (etaSeconds > 0 && etasSinceRefresh < etaSeconds + 10) {
+                    etaCountdown.textContent = `ETA: ${formatETA(etaSeconds)}`;
+                    etaSeconds--;
+                    etasSinceRefresh++;
+                } else if (etaSeconds > 0) {
+                    // We've decremented too much, show current value but don't decrement further
+                    etaCountdown.textContent = `ETA: ${formatETA(etaSeconds)} (updating...)`;
+                } else {
+                    etaCountdown.textContent = 'Finishing up...';
+                }
+            } else {
+                etaCountdown.textContent = 'Calculating ETA...';
+            }
+        }
+
+        function updateSimulationStatus() {
+            return fetch('/api/simulation_status')
+                .then(response => response.json())
+                .then(data => {
+                    const overlay = document.getElementById('simulation-overlay');
+                    const mainContent = document.getElementById('main-content');
+                    const overlayMessage = document.getElementById('overlay-message');
+                    const countdownText = document.getElementById('countdown-text');
+                    const phaseName = document.getElementById('phase-name');
+                    const progressBar = document.getElementById('progress-bar');
+                    const etaDisplay = document.getElementById('eta-display');
+
+                    // Update values from API
+                    const newWeek = data.current_week || 0;
+                    const newIsRunning = data.is_running;
+                    
+                    // Update week
+                    currentWeek = newWeek;
+                    isRunning = newIsRunning;
+
+                    // Store next_simulation_time timestamp
+                    // The backend sends UTC time as ISO string with 'Z' suffix
+                    // JavaScript Date will correctly parse this as UTC and convert to user's local timezone
+                    if (data.next_simulation_time) {
+                        // Ensure the string has 'Z' to indicate UTC if it doesn't already
+                        let timeStr = data.next_simulation_time;
+                        if (!timeStr.endsWith('Z') && !timeStr.includes('+') && !timeStr.includes('-', 10)) {
+                            timeStr = timeStr + 'Z';
+                        }
+                        const newTime = new Date(timeStr);
+                        // Validate the date was parsed correctly
+                        if (!isNaN(newTime.getTime())) {
+                            if (!nextSimulationTime || newTime.getTime() !== nextSimulationTime.getTime()) {
+                                nextSimulationTime = newTime;
+                            }
+                        } else {
+                            console.error('Failed to parse next_simulation_time:', data.next_simulation_time);
+                            nextSimulationTime = null;
+                        }
+                    } else {
+                        nextSimulationTime = null;
+                    }
+
+                    if (data.is_running) {
+                        // Show overlay and disable interactions
+                        if (overlay) {
+                            overlay.classList.remove('hidden');
+                        }
+                        if (mainContent) {
+                            mainContent.style.pointerEvents = 'none';
+                            mainContent.style.opacity = '0.5';
+                        }
+                        if (overlayMessage) {
+                            overlayMessage.textContent = data.status_message || `Week ${currentWeek} results are being posted... come back soon!`;
+                        }
+                        if (countdownText) {
+                            // Show ETA in navbar countdown when simulation is running
+                            if (data.eta_seconds !== null && data.eta_seconds !== undefined && data.eta_seconds > 0) {
+                                countdownText.textContent = `Running... ETA: ${formatETA(data.eta_seconds)}`;
+                            } else {
+                                countdownText.textContent = 'Simulation running...';
+                            }
+                        }
+                        
+                        // Update ETA display
+                        if (data.current_phase && data.phase_name) {
+                            if (phaseName) {
+                                phaseName.textContent = data.phase_name;
+                            }
+                            if (progressBar && data.progress_percentage !== undefined) {
+                                progressBar.style.width = `${data.progress_percentage}%`;
+                            }
+                            
+                            // Update ETA with smoothing
+                            if (data.eta_seconds !== null && data.eta_seconds !== undefined) {
+                                const alpha = 0.3; // Smoothing factor
+                                if (smoothedRate === null) {
+                                    smoothedRate = data.eta_seconds;
+                                } else {
+                                    smoothedRate = alpha * data.eta_seconds + (1 - alpha) * smoothedRate;
+                                }
+                                etaSeconds = Math.round(smoothedRate);
+                                lastETARefresh = Date.now();
+                                etasSinceRefresh = 0; // Reset counter when we get fresh data
+                            }
+                            
+                            if (etaDisplay) {
+                                etaDisplay.style.display = 'block';
+                            }
+                        } else {
+                            if (etaDisplay) {
+                                etaDisplay.style.display = 'none';
+                            }
+                        }
+                    } else {
+                        // Hide overlay and enable interactions
+                        if (overlay) {
+                            overlay.classList.add('hidden');
+                        }
+                        if (mainContent) {
+                            mainContent.style.pointerEvents = 'auto';
+                            mainContent.style.opacity = '1';
+                        }
+                        // Countdown will be updated by the interval based on nextSimulationTime
+                        
+                        // Reset ETA
+                        etaSeconds = null;
+                        smoothedRate = null;
+                        lastETARefresh = null;
+                        etasSinceRefresh = 0;
+                        if (etaDisplay) {
+                            etaDisplay.style.display = 'none';
+                        }
+                    }
+                    
+                    // Restart polling with appropriate interval if state changed
+                    const newInterval = isRunning ? 5000 : 45000;
+                    if (newInterval !== pollingIntervalMs) {
+                        startSimulationStatusPolling();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching simulation status:', error);
+                });
+        }
+
+        let pollingIntervalMs = 45000; // Default: 45 seconds when not running
+        
+        // Start polling simulation status
+        // Poll more frequently when simulation is running to get accurate ETA
+        function startSimulationStatusPolling() {
+            if (simulationStatusInterval) {
+                clearInterval(simulationStatusInterval);
+            }
+            // Poll every 5 seconds when running, 45 seconds when not running
+            pollingIntervalMs = isRunning ? 5000 : 45000;
+            simulationStatusInterval = setInterval(() => {
+                updateSimulationStatus();
+            }, pollingIntervalMs);
+        }
+
+        // Update countdown every second
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+        }
+        countdownInterval = setInterval(() => {
+            if (!isRunning && nextSimulationTime) {
+                const seconds = calculateCountdownFromTime();
+                updateCountdown(seconds);
+                if (seconds <= 0) {
+                    // Countdown reached 0, refresh status to check if simulation started
+                    updateSimulationStatus();
+                }
+            } else if (!isRunning && !nextSimulationTime) {
+                // No simulation time set, show appropriate message
+                updateCountdown(null);
+            } else if (isRunning) {
+                // When running, update navbar countdown with ETA
+                const countdownText = document.getElementById('countdown-text');
+                if (countdownText && etaSeconds !== null && etaSeconds !== undefined) {
+                    if (etaSeconds > 0) {
+                        countdownText.textContent = `Running... ETA: ${formatETA(etaSeconds)}`;
+                    } else {
+                        countdownText.textContent = 'Finishing up...';
+                    }
+                }
+            }
+        }, 1000);
+
+        // Update ETA every second when simulation is running
+        if (etaInterval) {
+            clearInterval(etaInterval);
+        }
+        etaInterval = setInterval(() => {
+            if (isRunning) {
+                updateETA();
+            }
+        }, 1000);
+
+        // Initial load
+        updateSimulationStatus().then(() => {
+            startSimulationStatusPolling();
+        });
+        
+        // Check for win notifications and show confetti
+        {% if current_user.is_authenticated %}
+        function checkWinNotification() {
+            fetch('/api/check_win_notification')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.has_win && data.team_color) {
+                        // Show confetti in team colors for 2 seconds
+                        const duration = 2000;
+                        const end = Date.now() + duration;
+                        const colors = [data.team_color];
+                        
+                        // Initial burst
+                        confetti({
+                            particleCount: 100,
+                            spread: 70,
+                            origin: { y: 0.6 },
+                            colors: colors
+                        });
+                        
+                        function frame() {
+                            // Continuous bursts from sides
+                            confetti({
+                                particleCount: 2,
+                                angle: 60,
+                                spread: 55,
+                                origin: { x: 0 },
+                                colors: colors
+                            });
+                            confetti({
+                                particleCount: 2,
+                                angle: 120,
+                                spread: 55,
+                                origin: { x: 1 },
+                                colors: colors
+                            });
+                            
+                            if (Date.now() < end) {
+                                requestAnimationFrame(frame);
+                            }
+                        }
+                        frame();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking win notification:', error);
+                });
+        }
+        
+        // Check for win notification on page load (after a small delay to ensure page is ready)
+        setTimeout(checkWinNotification, 500);
+        {% endif %}
+    </script>
 </body>
 </html>

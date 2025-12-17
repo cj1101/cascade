@@ -162,31 +162,157 @@ def _select_player_by_ranking(team):
         return None
     
     # Calculate weights: better ranked players (lower number) have higher weight
-    # Ranking 1 gets weight 7, ranking 7 gets weight 1
-    player_weights = [8 - player.get('ranking', 4) for player in team.players]
+    # Ranking 1.0 gets weight 7, ranking 7.0 gets weight 1
+    # Handle both int and float rankings
+    player_weights = [8.0 - float(player.get('ranking', 4.0)) for player in team.players]
+    # Ensure all weights are positive (minimum 0.1)
+    player_weights = [max(0.1, w) for w in player_weights]
     selected_player = random.choices(team.players, weights=player_weights)[0]
     return selected_player
 
 
 def _select_stat_type_by_best_stat(player):
-    """Select stat type (run/throw/kick) based on player's best_stat with bias"""
+    """Select stat type (run/throw/kick) based on player's species and best_stat with rigid filters"""
+    species = player.get('species', 'Vif' if player.get('role') == 'Runner' else 'Human')
     best_stat = player.get('best_stat', 'Run')
+    is_injured = player.get('injured', False)
     
-    # Bias weights: best_stat gets higher weight
+    # Base weights based on best_stat
     if best_stat == 'Run':
-        weights = [5, 2, 1]  # run:throw:kick
+        base_weights = [5, 2, 1]  # run:throw:kick
     elif best_stat == 'Throw':
-        weights = [1, 5, 2]  # run:throw:kick
+        base_weights = [1, 5, 2]  # run:throw:kick
     else:  # Kick
-        weights = [1, 2, 5]  # run:throw:kick
+        base_weights = [1, 2, 5]  # run:throw:kick
+    
+    # Apply species-based multipliers (rigid filters)
+    if species == 'Vif':
+        # Vif (Runner): Run×3.0, Throw×1.0, Kick×0.1
+        species_multipliers = [3.0, 1.0, 0.1]  # run:throw:kick
+    else:
+        # Human (Anchor): Run×0.05, Throw×2.5, Kick×2.0
+        species_multipliers = [0.05, 2.5, 2.0]  # run:throw:kick
+    
+    # Apply species multipliers to base weights
+    weights = [base_weights[i] * species_multipliers[i] for i in range(3)]
+    
+    # Apply 50% penalty if injured
+    if is_injured:
+        weights = [w * 0.5 for w in weights]
+    
+    # Apply player advantages
+    advantage = player.get('advantage', {})
+    advantage_type = advantage.get('type', '')
+    advantage_value = advantage.get('value', 0.0)
+    
+    if advantage_type == 'run_boost':
+        weights[0] = weights[0] * (1 + advantage_value)
+    elif advantage_type == 'throw_boost':
+        weights[1] = weights[1] * (1 + advantage_value)
+    elif advantage_type == 'kick_boost':
+        weights[2] = weights[2] * (1 + advantage_value)
+    
+    # Ensure all weights are positive (minimum 0.01)
+    weights = [max(0.01, w) for w in weights]
     
     stat_types = ['run', 'throw', 'kick']
     return random.choices(stat_types, weights=weights)[0]
 
 
+def _calculate_yards_for_attempt(score_type):
+    """Calculate yards gained for an attempt based on type"""
+    if score_type == 'run':
+        return random.randint(8, 15)  # Runs gain more yards
+    elif score_type == 'throw':
+        return random.randint(5, 10)  # Throws gain medium yards
+    else:  # kick
+        return random.randint(2, 5)  # Kicks gain fewer yards
+
+
+def _calculate_turnover_risk(player, action_failed, momentum):
+    """
+    Calculate injury/turnover risk when action fails.
+    
+    Args:
+        player: Player dictionary
+        action_failed: Boolean indicating if action failed
+        momentum: Player's current momentum
+    
+    Returns:
+        Boolean indicating if injury occurred
+    """
+    if not action_failed:
+        return False
+    
+    species = player.get('species', 'Vif' if player.get('role') == 'Runner' else 'Human')
+    
+    if species == 'Vif':
+        # Vif: High risk if Momentum > 1 and failure occurs (5-10% injury chance)
+        if momentum > 1:
+            injury_chance = random.uniform(0.05, 0.10)  # 5-10% chance
+            return random.random() < injury_chance
+    # Human: Low risk (solid, difficult to strip ball) - essentially 0% chance
+    return False
+
+
 def _process_scoring_opportunity(team, team_detail, team_score, team_player_stats):
     """Process a single scoring opportunity for a team, tracking player stats"""
-    # Select player based on ranking
+    # Generate 1-2 failed attempts before a successful one to achieve 3-4:1 ratio
+    num_failed_attempts = random.randint(1, 2)
+    
+    # Process failed attempts first (tracked but no points)
+    for _ in range(num_failed_attempts):
+        player = _select_player_by_ranking(team)
+        if not player:
+            # Fallback to old method if no players
+            team_weights = [
+                max(1, 3 + team.run_advantage),
+                max(1, 3 + team.throw_advantage),
+                max(1, 3 + team.kick_advantage)
+            ]
+            score_type = random.choices(['run', 'throw', 'kick'], weights=team_weights)[0]
+        else:
+            score_type = _select_stat_type_by_best_stat(player)
+            player_id = player.get('id', player['name'])  # Use ID if available, fallback to name
+            player_name = player['name']
+            
+            # Initialize player stats if needed (key by ID, include name in stats)
+            if player_id not in team_player_stats:
+                team_player_stats[player_id] = {
+                    'player_id': player_id,
+                    'player_name': player_name,
+                    'points': 0,
+                    'runs_attempted': 0,
+                    'runs_completed': 0,
+                    'throws_attempted': 0,
+                    'throws_completed': 0,
+                    'kicks_attempted': 0,
+                    'kicks_completed': 0,
+                    'cascade_runs': 0,
+                    'cascade_throws': 0,
+                    'cascade_kicks': 0,
+                    'yards': 0,
+                    'injured': player.get('injured', False),  # Track if player started injured
+                    'injured_during_game': False  # Track if player got injured during this game
+                }
+            else:
+                # Update injury status if player was already injured at start (for existing stats)
+                if player.get('injured', False) and not team_player_stats[player_id].get('injured', False):
+                    team_player_stats[player_id]['injured'] = True
+            
+            # Track failed attempt
+            if score_type == 'run':
+                team_player_stats[player_id]['runs_attempted'] += 1
+            elif score_type == 'throw':
+                team_player_stats[player_id]['throws_attempted'] += 1
+            else:  # kick
+                team_player_stats[player_id]['kicks_attempted'] += 1
+            
+            # Calculate yards for failed attempt (still gain yards even on failed attempts)
+            yards = _calculate_yards_for_attempt(score_type)
+            team_player_stats[player_id]['yards'] += yards
+    
+    # Now attempt the successful play
     player = _select_player_by_ranking(team)
     if not player:
         # Fallback to old method if no players
@@ -199,11 +325,14 @@ def _process_scoring_opportunity(team, team_detail, team_score, team_player_stat
     else:
         # Select stat type based on player's best_stat
         score_type = _select_stat_type_by_best_stat(player)
+        player_id = player.get('id', player['name'])  # Use ID if available, fallback to name
         player_name = player['name']
         
-        # Initialize player stats if needed
-        if player_name not in team_player_stats:
-            team_player_stats[player_name] = {
+        # Initialize player stats if needed (key by ID, include name in stats)
+        if player_id not in team_player_stats:
+            team_player_stats[player_id] = {
+                'player_id': player_id,
+                'player_name': player_name,
                 'points': 0,
                 'runs_attempted': 0,
                 'runs_completed': 0,
@@ -213,37 +342,89 @@ def _process_scoring_opportunity(team, team_detail, team_score, team_player_stat
                 'kicks_completed': 0,
                 'cascade_runs': 0,
                 'cascade_throws': 0,
-                'cascade_kicks': 0
+                'cascade_kicks': 0,
+                'yards': 0,
+                'injured': player.get('injured', False),  # Track if player started injured
+                'injured_during_game': False  # Track if player got injured during this game
             }
+        else:
+            # Update injury status if player was already injured at start (for existing stats)
+            if player.get('injured', False) and not team_player_stats[player_id].get('injured', False):
+                team_player_stats[player_id]['injured'] = True
         
         # Track attempt
         if score_type == 'run':
-            team_player_stats[player_name]['runs_attempted'] += 1
+            team_player_stats[player_id]['runs_attempted'] += 1
         elif score_type == 'throw':
-            team_player_stats[player_name]['throws_attempted'] += 1
+            team_player_stats[player_id]['throws_attempted'] += 1
         else:  # kick
-            team_player_stats[player_name]['kicks_attempted'] += 1
+            team_player_stats[player_id]['kicks_attempted'] += 1
+        
+        # Calculate yards for this attempt
+        yards = _calculate_yards_for_attempt(score_type)
+        team_player_stats[player_id]['yards'] += yards
     
-    # Determine completion probability based on action type
-    # Run: ~30%, Throw: 45-50%, Kick: ~70%
-    completion_success = False
-    if score_type == 'run':
-        # Run completion: roughly 30% (use 0.30 with some variance)
-        completion_success = random.random() < 0.30
-    elif score_type == 'throw':
-        # Throw completion: 45-50% (use 0.475 average, random between 0.45-0.50)
-        throw_prob = random.uniform(0.45, 0.50)
-        completion_success = random.random() < throw_prob
-    else:  # kick
-        # Kick completion: ~70% (use 0.70)
-        completion_success = random.random() < 0.70
+    # Determine completion probability based on species and action type
+    species = player.get('species', 'Vif' if player.get('role') == 'Runner' else 'Human') if player else 'Vif'
+    is_injured = player.get('injured', False) if player else False
     
-    # If attempt failed, return 0 points (attempt was already tracked)
+    # Species-specific base probabilities
+    if species == 'Vif':
+        # Vif (Runner): Run 0.45, Throw 0.35, Kick 0.40
+        if score_type == 'run':
+            base_completion_prob = 0.45
+        elif score_type == 'throw':
+            base_completion_prob = 0.35
+        else:  # kick
+            base_completion_prob = 0.40
+    else:
+        # Human (Anchor): Run 0.10, Throw 0.60, Kick 0.75
+        if score_type == 'run':
+            base_completion_prob = 0.10
+        elif score_type == 'throw':
+            base_completion_prob = 0.60
+        else:  # kick
+            base_completion_prob = 0.75
+    
+    # Apply momentum boost (5% per momentum level)
+    if player:
+        momentum = player.get('momentum', 0)
+        momentum_boost = momentum * 0.05  # 5% per level
+        base_completion_prob = min(0.95, base_completion_prob + momentum_boost)
+    
+    # Apply 50% penalty if injured
+    if is_injured:
+        base_completion_prob = base_completion_prob * 0.5
+    
+    completion_success = random.random() < base_completion_prob
+    
+    # If attempt failed, check for turnover/injury risk
     if not completion_success:
+        if player:
+            # Check for injury/turnover risk
+            momentum = player.get('momentum', 0)
+            injury_occurred = _calculate_turnover_risk(player, True, momentum)
+            if injury_occurred:
+                player['injured'] = True
+                # Track injury in player stats
+                player_id = player.get('id', player['name'])
+                if player_id in team_player_stats:
+                    team_player_stats[player_id]['injured'] = True
+                    team_player_stats[player_id]['injured_during_game'] = True
         return 0
     
     # Determine if scoring is successful (cascade chance) - only if completion succeeded
-    cascade = random.random() < 1/15  # Cascade zone chance
+    cascade_prob = 1/15  # Base cascade zone chance
+    if player:
+        species = player.get('species', 'Vif' if player.get('role') == 'Runner' else 'Human')
+        # Vif get +10% base cascade probability during runs
+        if species == 'Vif' and score_type == 'run':
+            cascade_prob += 0.10
+        
+        advantage = player.get('advantage', {})
+        if advantage.get('type') == 'cascade_boost':
+            cascade_prob += advantage.get('value', 0.0)
+    cascade = random.random() < cascade_prob
     
     # Calculate points
     if score_type == 'run':
@@ -267,20 +448,20 @@ def _process_scoring_opportunity(team, team_detail, team_score, team_player_stat
     
     # Track completion and points for player (only if attempt succeeded)
     if player:
-        player_name = player['name']
+        player_id = player.get('id', player['name'])  # Use ID if available, fallback to name
         if score_type == 'run':
-            team_player_stats[player_name]['runs_completed'] += 1
+            team_player_stats[player_id]['runs_completed'] += 1
             if cascade:
-                team_player_stats[player_name]['cascade_runs'] += 1
+                team_player_stats[player_id]['cascade_runs'] += 1
         elif score_type == 'throw':
-            team_player_stats[player_name]['throws_completed'] += 1
+            team_player_stats[player_id]['throws_completed'] += 1
             if cascade:
-                team_player_stats[player_name]['cascade_throws'] += 1
+                team_player_stats[player_id]['cascade_throws'] += 1
         else:  # kick
-            team_player_stats[player_name]['kicks_completed'] += 1
+            team_player_stats[player_id]['kicks_completed'] += 1
             if cascade:
-                team_player_stats[player_name]['cascade_kicks'] += 1
-        team_player_stats[player_name]['points'] += points
+                team_player_stats[player_id]['cascade_kicks'] += 1
+        team_player_stats[player_id]['points'] += points
     
     return points
 
@@ -322,9 +503,157 @@ def simulate_game_session(team1, team2):
     return team1_score, team2_score, team1_detail, team2_detail, team1_player_stats, team2_player_stats
 
 
-def play_game(team1, team2):
+def _calculate_player_ranking(player, all_players):
+    """
+    Calculate player ranking based on points (40%), points/attempts (30%), and yards (30%).
+    Lower ranking number = better player (1 is best, 7 is worst).
+    Returns ranking as float.
+    
+    Args:
+        player: Player dictionary to calculate ranking for
+        all_players: List of all player dictionaries for comparison
+    """
+    season_stats = player.get('season_stats', {})
+    total_points = season_stats.get('total_points', 0)
+    total_attempts = season_stats.get('total_attempts', 0)
+    total_yards = season_stats.get('total_yards', 0)
+    
+    # Normalize stats across all players for fair comparison
+    if all_players:
+        max_points = max([p.get('season_stats', {}).get('total_points', 0) for p in all_players], default=1)
+        max_yards = max([p.get('season_stats', {}).get('total_yards', 0) for p in all_players], default=1)
+        
+        # Points score (40% weight) - normalized to 0-1
+        points_score = (total_points / max_points) if max_points > 0 else 0
+        
+        # Points per attempt score (30% weight) - efficiency metric
+        points_per_attempt = (total_points / total_attempts) if total_attempts > 0 else 0
+        max_ppa = max([(p.get('season_stats', {}).get('total_points', 0) / 
+                       max(1, p.get('season_stats', {}).get('total_attempts', 0))) 
+                      for p in all_players], default=1)
+        ppa_score = (points_per_attempt / max_ppa) if max_ppa > 0 else 0
+        
+        # Yards score (30% weight) - normalized to 0-1
+        yards_score = (total_yards / max_yards) if max_yards > 0 else 0
+        
+        # Combined score (0-1 scale, higher is better)
+        combined_score = (points_score * 0.4) + (ppa_score * 0.3) + (yards_score * 0.3)
+    else:
+        # If no other players to compare, use default
+        combined_score = 0.5
+    
+    # Convert to ranking (1-7 scale, lower is better)
+    # Best players get ranking 1-2, worst get 6-7
+    # Map combined_score (0-1) to ranking (1-7)
+    ranking = 1 + (1 - combined_score) * 6
+    return max(1.0, min(7.0, ranking))
+
+
+def _update_player_momentum(player, game_stats):
+    """
+    Update player momentum based on game performance.
+    Momentum ranges from -2 to +2.
+    Good performance (high points/attempts) increases momentum.
+    Poor performance decreases momentum.
+    Species-specific volatility: Vif have double changes, Humans have halved changes.
+    """
+    if not game_stats:
+        return
+    
+    species = player.get('species', 'Vif' if player.get('role') == 'Runner' else 'Human')
+    
+    points = game_stats.get('points', 0)
+    attempts = (game_stats.get('runs_attempted', 0) + 
+                game_stats.get('throws_attempted', 0) + 
+                game_stats.get('kicks_attempted', 0))
+    
+    if attempts == 0:
+        # No attempts, slight negative momentum
+        base_momentum_change = -0.5
+    else:
+        points_per_attempt = points / attempts
+        # Good performance: >0.5 points/attempt → positive momentum
+        # Poor performance: <0.3 points/attempt → negative momentum
+        if points_per_attempt > 0.5:
+            base_momentum_change = 1.0
+        elif points_per_attempt > 0.3:
+            base_momentum_change = 0.5
+        elif points_per_attempt > 0.1:
+            base_momentum_change = 0.0
+        else:
+            base_momentum_change = -0.5
+    
+    # Apply species-specific volatility
+    if species == 'Vif':
+        # Vif: Volatile - double momentum changes
+        # For 1.0 → 1.5 or 2.0, for 0.5 → 1.0, for -0.5 → -1.0
+        if base_momentum_change > 0:
+            momentum_change = base_momentum_change * 1.5  # Slightly more than double for excitement
+        elif base_momentum_change < 0:
+            momentum_change = base_momentum_change * 1.5  # More volatile negative
+        else:
+            momentum_change = 0.0
+    else:
+        # Human: Stable - halve momentum changes
+        momentum_change = base_momentum_change * 0.5
+    
+    current_momentum = player.get('momentum', 0)
+    new_momentum = current_momentum + momentum_change
+    # Clamp to -2 to +2 range
+    player['momentum'] = max(-2, min(2, new_momentum))
+
+
+def _update_player_season_stats(team, team_player_stats):
+    """
+    Update season stats for all players on a team based on game performance.
+    """
+    for player in team.players:
+        player_id = player.get('id', player['name'])  # Use ID if available, fallback to name
+        game_stats = team_player_stats.get(player_id, {})
+        
+        season_stats = player.get('season_stats', {
+            'total_points': 0,
+            'total_attempts': 0,
+            'total_completions': 0,
+            'total_yards': 0
+        })
+        
+        # Update season totals
+        season_stats['total_points'] += game_stats.get('points', 0)
+        season_stats['total_attempts'] += (game_stats.get('runs_attempted', 0) +
+                                           game_stats.get('throws_attempted', 0) +
+                                           game_stats.get('kicks_attempted', 0))
+        season_stats['total_completions'] += (game_stats.get('runs_completed', 0) +
+                                             game_stats.get('throws_completed', 0) +
+                                             game_stats.get('kicks_completed', 0))
+        season_stats['total_yards'] += game_stats.get('yards', 0)
+        
+        player['season_stats'] = season_stats
+
+
+def _update_all_player_rankings(teams):
+    """
+    Update rankings for all players across all teams based on current season stats.
+    """
+    # Collect all players for comparison
+    all_players = []
+    for team in teams:
+        all_players.extend(team.players)
+    
+    # Update each player's ranking
+    for player in all_players:
+        new_ranking = _calculate_player_ranking(player, all_players)
+        player['ranking'] = new_ranking
+
+
+def play_game(team1, team2, is_tournament_final=False):
     """
     Plays a game, updates team stats, and returns results.
+    
+    Args:
+        team1: First team
+        team2: Second team
+        is_tournament_final: If True, injuries are preserved after the game (default: False)
     """
     # Run the simulation
     team1_score, team2_score, team1_detail, team2_detail, team1_player_stats, team2_player_stats = simulate_game_session(team1, team2)
@@ -370,9 +699,35 @@ def play_game(team1, team2):
     if winner_detail.kicks > loser_detail.kicks:
         winner.kick_advantage = min(3, winner.kick_advantage + 1)
         loser.kick_advantage = max(-3, loser.kick_advantage - 1)
-    elif winner_detail.kicks < loser_detail.kicks:
-        loser.kick_advantage = min(3, loser.kick_advantage + 1)
-        winner.kick_advantage = max(-3, winner.kick_advantage - 1)
+    
+    # Update player season stats
+    _update_player_season_stats(team1, team1_player_stats)
+    _update_player_season_stats(team2, team2_player_stats)
+    
+    # Update momentum for all players based on game performance
+    for player in team1.players:
+        player_id = player.get('id', player['name'])  # Use ID if available, fallback to name
+        game_stats = team1_player_stats.get(player_id, {})
+        _update_player_momentum(player, game_stats)
+    
+    for player in team2.players:
+        player_id = player.get('id', player['name'])  # Use ID if available, fallback to name
+        game_stats = team2_player_stats.get(player_id, {})
+        _update_player_momentum(player, game_stats)
+    
+    # Reset momentum to 0 for all players on losing team
+    for player in loser.players:
+        player['momentum'] = 0
+    
+    # Clear injuries for all players after game (except tournament final)
+    if not is_tournament_final:
+        for player in team1.players:
+            player['injured'] = False
+        for player in team2.players:
+            player['injured'] = False
+    
+    # Note: Player rankings are updated at the round_robin level after each week
+    # to ensure all teams are included in the calculation
     
     game_result = {
         'team1': team1,
@@ -447,6 +802,10 @@ def round_robin(teams, max_rounds=None, start_week=1):
             for upset in upsets:
                 print(upset)
         
+        # Update player rankings after all games in the week are complete
+        # This ensures rankings are calculated across all teams
+        _update_all_player_rankings(teams)
+        
         print("\nCurrent Standings:")
         display_standings(teams)
     
@@ -505,11 +864,20 @@ def calculate_matchup_odds(team1, team2):
     return team1_odds, team2_odds
 
 
-def generate_betting_lines(team1, team2, num_simulations=1000):
+def generate_betting_lines(team1, team2, num_simulations=None, is_official=False):
     """
     Simulates upcoming matchup to generate Spread, Total, Moneyline, and Prop Bets.
     Returns a dictionary with all betting info.
+    
+    Args:
+        team1: First team object
+        team2: Second team object
+        num_simulations: Number of simulations to run (if None, uses 1000 for official, 150 for fast)
+        is_official: If True, uses 1000 simulations for accurate "vegas-style" odds. If False, uses 150 for faster calculation.
     """
+    # Determine number of simulations based on is_official flag if not explicitly provided
+    if num_simulations is None:
+        num_simulations = 1000 if is_official else 150
 
     # 1. Run Simulations
     sim_results = []
@@ -601,13 +969,16 @@ def generate_betting_lines(team1, team2, num_simulations=1000):
         'moneyline': (ml1, ml2),
         'spread_str': spread_str,
         'spread_value': spread_value,
+        'spread_fav_odds': spread_fav_odds,
+        'spread_dog_odds': spread_dog_odds,
         'favorite': favorite,
         'underdog': underdog,
         'total': total_line,
         'team1_total': avg_t1,
         'team2_total': avg_t2,
         'cascade_yes_odds': cascade_yes,
-        'most_common_method': most_common_method
+        'most_common_method': most_common_method,
+        'is_official': is_official
     }
 
 def format_betting_slip(matchups):
@@ -621,7 +992,8 @@ def format_betting_slip(matchups):
     lines.append("")
 
     for team1, team2 in matchups:
-        data = generate_betting_lines(team1, team2)
+        # Use official calculation for betting slip formatting
+        data = generate_betting_lines(team1, team2, is_official=True)
 
         lines.append(f"⚔️ {team1.name.upper()} vs {team2.name.upper()}")
 
@@ -761,6 +1133,19 @@ def format_game_results_for_caption(week_game_results):
         
         lines.append(f"  {team1.name}: {detail1.runs} runs, {detail1.throws} throws, {detail1.kicks} kicks{cascade1_str}")
         
+        # Check for injured players in team 1
+        team1_player_stats = game_result.get('team1_player_stats', {})
+        injured_players_team1 = []
+        for player_id, stats in team1_player_stats.items():
+            if stats.get('injured', False):
+                player_name = stats.get('player_name', player_id)
+                if stats.get('injured_during_game', False):
+                    injured_players_team1.append(f"{player_name} (injured during game)")
+                else:
+                    injured_players_team1.append(f"{player_name} (playing injured)")
+        if injured_players_team1:
+            lines.append(f"  ⚠️ {team1.name} Injuries: {', '.join(injured_players_team1)}")
+        
         # Scoring breakdown for team 2
         cascade2_parts = []
         if detail2.cascade_runs > 0:
@@ -772,6 +1157,20 @@ def format_game_results_for_caption(week_game_results):
         cascade2_str = f" ({', '.join(cascade2_parts)})" if cascade2_parts else ""
         
         lines.append(f"  {team2.name}: {detail2.runs} runs, {detail2.throws} throws, {detail2.kicks} kicks{cascade2_str}")
+        
+        # Check for injured players in team 2
+        team2_player_stats = game_result.get('team2_player_stats', {})
+        injured_players_team2 = []
+        for player_id, stats in team2_player_stats.items():
+            if stats.get('injured', False):
+                player_name = stats.get('player_name', player_id)
+                if stats.get('injured_during_game', False):
+                    injured_players_team2.append(f"{player_name} (injured during game)")
+                else:
+                    injured_players_team2.append(f"{player_name} (playing injured)")
+        if injured_players_team2:
+            lines.append(f"  ⚠️ {team2.name} Injuries: {', '.join(injured_players_team2)}")
+        
         lines.append("")  # Blank line between games
     
     # Remove trailing blank line
@@ -925,7 +1324,10 @@ def tournament(teams):
     
     while team1_wins < 2 and team2_wins < 2:
         print(f"\nGame {game_num}:")
-        result, upset, game_result = play_game(team1, team2)
+        # Check if this is the final game that will complete the series (one team at 1 win, other at 0 or 1)
+        # This is the game where one team will reach 2 wins
+        is_final_game = (team1_wins == 1 or team2_wins == 1)
+        result, upset, game_result = play_game(team1, team2, is_tournament_final=is_final_game)
         print(result)
         
         # Determine winner of this game
@@ -1001,4 +1403,239 @@ def tournament(teams):
     final_result = final_results[-1]
     
     return quarterfinals, semifinals, final_result, tournament_images
+
+
+def american_odds_to_probability(odds):
+    """
+    Convert American odds to implied probability.
+    
+    Positive odds (+150): probability = 100 / (odds + 100)
+    Negative odds (-200): probability = abs(odds) / (abs(odds) + 100)
+    """
+    if odds > 0:
+        return 100 / (odds + 100)
+    else:
+        return abs(odds) / (abs(odds) + 100)
+
+
+def calculate_parlay_odds(bet_odds_list):
+    """
+    Calculate combined odds for a parlay.
+    
+    Args:
+        bet_odds_list: List of American odds (integers)
+    
+    Returns:
+        Tuple of (combined_american_odds, implied_probability)
+    """
+    if not bet_odds_list:
+        return None, None
+    
+    # Convert all odds to probabilities
+    probabilities = [american_odds_to_probability(odds) for odds in bet_odds_list]
+    
+    # Multiply probabilities together
+    combined_prob = 1.0
+    for prob in probabilities:
+        combined_prob *= prob
+    
+    # Convert back to American odds
+    combined_odds = probability_to_american_odds(combined_prob)
+    
+    return int(combined_odds), combined_prob
+
+
+def generate_player_prop_odds(player_name, team, opponent_team, prop_type, line_value, num_simulations=None, is_official=False):
+    """
+    Generate odds for player-specific prop bets.
+    
+    Args:
+        player_name: Name of the player
+        team: Team object the player belongs to
+        opponent_team: Opponent team object
+        prop_type: Type of prop ('points_ou', 'runs_attempted_ou', 'throws_attempted_ou', 
+                  'kicks_attempted_ou', 'runs_completed_ou', 'throws_completed_ou', 
+                  'kicks_completed_ou', 'cascades_ou')
+        line_value: The line value for Over/Under
+        num_simulations: Number of simulations to run (if None, uses 1000 for official, 100 for fast)
+        is_official: If True, uses 1000 simulations for accurate odds. If False, uses 100 for faster calculation.
+    
+    Returns:
+        Dictionary with 'over_odds', 'under_odds' (American odds), and 'is_official' flag
+    """
+    # Determine number of simulations based on is_official flag if not explicitly provided
+    if num_simulations is None:
+        num_simulations = 1000 if is_official else 100
+    # Find the player in the team
+    player = None
+    for p in team.players:
+        if p.get('name') == player_name:
+            player = p
+            break
+    
+    if not player:
+        # Player not found, return default odds
+        return {'over_odds': -110, 'under_odds': -110}
+    
+    over_count = 0
+    
+    for _ in range(num_simulations):
+        _, _, _, _, team1_player_stats, team2_player_stats = simulate_game_session(team, opponent_team)
+        
+        # Determine which stats dict to use
+        player_stats = team1_player_stats if team == team else team2_player_stats
+        
+        if player_name not in player_stats:
+            continue
+        
+        stats = player_stats[player_name]
+        value = 0
+        
+        if prop_type == 'points_ou':
+            value = stats.get('points', 0)
+        elif prop_type == 'runs_attempted_ou':
+            value = stats.get('runs_attempted', 0)
+        elif prop_type == 'throws_attempted_ou':
+            value = stats.get('throws_attempted', 0)
+        elif prop_type == 'kicks_attempted_ou':
+            value = stats.get('kicks_attempted', 0)
+        elif prop_type == 'runs_completed_ou':
+            value = stats.get('runs_completed', 0)
+        elif prop_type == 'throws_completed_ou':
+            value = stats.get('throws_completed', 0)
+        elif prop_type == 'kicks_completed_ou':
+            value = stats.get('kicks_completed', 0)
+        elif prop_type == 'cascades_ou':
+            value = (stats.get('cascade_runs', 0) + 
+                    stats.get('cascade_throws', 0) + 
+                    stats.get('cascade_kicks', 0))
+        
+        if value > line_value:
+            over_count += 1
+    
+    over_prob = over_count / num_simulations
+    under_prob = 1.0 - over_prob
+    
+    over_odds = probability_to_american_odds(over_prob)
+    under_odds = probability_to_american_odds(under_prob)
+    
+    return {
+        'over_odds': int(over_odds),
+        'under_odds': int(under_odds),
+        'is_official': is_official
+    }
+
+
+def generate_first_score_props(team1, team2, num_simulations=1000):
+    """
+    Generate odds for first score type props.
+    
+    Returns:
+        Dictionary with odds for:
+        - team1_run, team1_throw, team1_kick
+        - team2_run, team2_throw, team2_kick
+    """
+    first_score_counts = {
+        'team1_run': 0,
+        'team1_throw': 0,
+        'team1_kick': 0,
+        'team2_run': 0,
+        'team2_throw': 0,
+        'team2_kick': 0
+    }
+    
+    for _ in range(num_simulations):
+        s1, s2, d1, d2, team1_stats, team2_stats = simulate_game_session(team1, team2)
+        
+        # Determine first score by checking which team scored first and what type
+        # We need to track the order, but simulate_game_session doesn't provide that
+        # So we'll use a simplified approach: check the first scoring play
+        # For now, use a heuristic based on which team has more of each type
+        
+        # Since we can't track exact order, we'll use probabilities based on team stats
+        # This is a limitation but we'll approximate
+        team1_chance = calculate_win_probability(team1, team2)
+        
+        # Simulate first score
+        if random.random() < team1_chance:
+            # Team 1 scores first - determine type based on their best stat
+            best_stat = team1.best_stat()
+            if best_stat == 'Run':
+                first_score_counts['team1_run'] += 1
+            elif best_stat == 'Throw':
+                first_score_counts['team1_throw'] += 1
+            else:
+                first_score_counts['team1_kick'] += 1
+        else:
+            # Team 2 scores first
+            best_stat = team2.best_stat()
+            if best_stat == 'Run':
+                first_score_counts['team2_run'] += 1
+            elif best_stat == 'Throw':
+                first_score_counts['team2_throw'] += 1
+            else:
+                first_score_counts['team2_kick'] += 1
+    
+    result = {}
+    for key, count in first_score_counts.items():
+        prob = count / num_simulations
+        if prob > 0:
+            result[key] = int(probability_to_american_odds(prob))
+        else:
+            result[key] = 1000  # Very long odds
+    
+    return result
+
+
+def generate_margin_props(team1, team2, num_simulations=1000):
+    """
+    Generate margin of victory prop odds.
+    
+    Returns:
+        Dictionary with odds for margin ranges:
+        - team1_1_5, team1_6_10, team1_11_plus
+        - team2_1_5, team2_6_10, team2_11_plus
+        - tie (overtime)
+    """
+    margin_counts = {
+        'team1_1_5': 0,
+        'team1_6_10': 0,
+        'team1_11_plus': 0,
+        'team2_1_5': 0,
+        'team2_6_10': 0,
+        'team2_11_plus': 0,
+        'tie': 0
+    }
+    
+    for _ in range(num_simulations):
+        s1, s2, _, _, _, _ = simulate_game_session(team1, team2)
+        
+        if s1 == s2:
+            margin_counts['tie'] += 1
+        elif s1 > s2:
+            margin = s1 - s2
+            if margin <= 5:
+                margin_counts['team1_1_5'] += 1
+            elif margin <= 10:
+                margin_counts['team1_6_10'] += 1
+            else:
+                margin_counts['team1_11_plus'] += 1
+        else:
+            margin = s2 - s1
+            if margin <= 5:
+                margin_counts['team2_1_5'] += 1
+            elif margin <= 10:
+                margin_counts['team2_6_10'] += 1
+            else:
+                margin_counts['team2_11_plus'] += 1
+    
+    result = {}
+    for key, count in margin_counts.items():
+        prob = count / num_simulations
+        if prob > 0:
+            result[key] = int(probability_to_american_odds(prob))
+        else:
+            result[key] = 1000  # Very long odds
+    
+    return result
 

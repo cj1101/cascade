@@ -2,6 +2,7 @@
 import random
 import logging
 import os
+import re
 import time
 
 # Try to import scheduler for logger, fallback to basic logging
@@ -11,13 +12,13 @@ try:
 except ImportError:
     logger = logging.getLogger(__name__)
 
-# Try to import Gemini API
+# Try to import Gemini API (new SDK)
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
-    logger.warning("google.generativeai not available. Gemini script generation will be disabled.")
+    logger.warning("google.genai not available. Gemini script generation will be disabled.")
 
 
 def load_gemini_api_key():
@@ -153,6 +154,59 @@ def extract_player_data_for_prompt(game_result):
     return "\n".join(player_data_parts)
 
 
+def describe_advantage(advantage_value, stat_type="overall"):
+    """
+    Convert numeric advantage value to descriptive phrase with random adjective.
+    Only mentions advantages that are publicly observable, not exact numeric values.
+    """
+    if advantage_value == 0:
+        return "no significant advantage"
+    
+    # Adjectives for positive advantages
+    positive_adjectives = [
+        "strong", "notable", "slight", "significant", "substantial",
+        "clear", "marked", "considerable", "pronounced", "evident"
+    ]
+    
+    # Adjectives for negative advantages (disadvantages)
+    negative_adjectives = [
+        "slight", "notable", "significant", "considerable", "marked"
+    ]
+    
+    # Determine magnitude categories
+    abs_value = abs(advantage_value)
+    if abs_value >= 3:
+        intensity = "significant"
+        adjectives = positive_adjectives if advantage_value > 0 else negative_adjectives
+    elif abs_value == 2:
+        intensity = "notable"
+        adjectives = positive_adjectives if advantage_value > 0 else negative_adjectives
+    else:
+        intensity = "slight"
+        adjectives = positive_adjectives if advantage_value > 0 else negative_adjectives
+    
+    if advantage_value > 0:
+        adjective = random.choice(adjectives)
+        if stat_type == "overall":
+            return f"a {adjective} overall advantage"
+        elif stat_type == "run":
+            return f"a {adjective} run advantage"
+        elif stat_type == "throw":
+            return f"a {adjective} throw advantage"
+        elif stat_type == "kick":
+            return f"a {adjective} kick advantage"
+    else:
+        adjective = random.choice(negative_adjectives)
+        if stat_type == "overall":
+            return f"a {adjective} overall disadvantage"
+        elif stat_type == "run":
+            return f"a {adjective} run disadvantage"
+        elif stat_type == "throw":
+            return f"a {adjective} throw disadvantage"
+        elif stat_type == "kick":
+            return f"a {adjective} kick disadvantage"
+
+
 def build_game_context(game_result, week, game_num, game_type="game"):
     """
     Build comprehensive game context string.
@@ -187,13 +241,40 @@ def build_game_context(game_result, week, game_num, game_type="game"):
         winner = team1 if team1_score > team2_score else team2
         context_parts.append(f"RESULT: Expected victory by {winner.name}")
 
+    # Build descriptive advantage strings (no numeric values)
+    team1_advantages = []
+    if team1.overall_advantage != 0:
+        team1_advantages.append(describe_advantage(team1.overall_advantage, "overall"))
+    if team1.run_advantage != 0:
+        team1_advantages.append(describe_advantage(team1.run_advantage, "run"))
+    if team1.throw_advantage != 0:
+        team1_advantages.append(describe_advantage(team1.throw_advantage, "throw"))
+    if team1.kick_advantage != 0:
+        team1_advantages.append(describe_advantage(team1.kick_advantage, "kick"))
+    
+    team2_advantages = []
+    if team2.overall_advantage != 0:
+        team2_advantages.append(describe_advantage(team2.overall_advantage, "overall"))
+    if team2.run_advantage != 0:
+        team2_advantages.append(describe_advantage(team2.run_advantage, "run"))
+    if team2.throw_advantage != 0:
+        team2_advantages.append(describe_advantage(team2.throw_advantage, "throw"))
+    if team2.kick_advantage != 0:
+        team2_advantages.append(describe_advantage(team2.kick_advantage, "kick"))
+    
     context_parts.append(f"\nTEAM 1 STATS ({team1.name}):")
-    context_parts.append(f"  Advantage: {team1.overall_advantage} (Run: {team1.run_advantage}, Throw: {team1.throw_advantage}, Kick: {team1.kick_advantage})")
+    if team1_advantages:
+        context_parts.append(f"  Advantages: {', '.join(team1_advantages)}")
+    else:
+        context_parts.append(f"  Advantages: balanced across all categories")
     context_parts.append(f"  Scoring: {team1_detail.runs} Runs, {team1_detail.throws} Throws, {team1_detail.kicks} Kicks")
     context_parts.append(f"  Cascade Zone: {team1_detail.cascade_runs} Runs, {team1_detail.cascade_throws} Throws, {team1_detail.cascade_kicks} Kicks")
 
     context_parts.append(f"\nTEAM 2 STATS ({team2.name}):")
-    context_parts.append(f"  Advantage: {team2.overall_advantage} (Run: {team2.run_advantage}, Throw: {team2.throw_advantage}, Kick: {team2.kick_advantage})")
+    if team2_advantages:
+        context_parts.append(f"  Advantages: {', '.join(team2_advantages)}")
+    else:
+        context_parts.append(f"  Advantages: balanced across all categories")
     context_parts.append(f"  Scoring: {team2_detail.runs} Runs, {team2_detail.throws} Throws, {team2_detail.kicks} Kicks")
     context_parts.append(f"  Cascade Zone: {team2_detail.cascade_runs} Runs, {team2_detail.cascade_throws} Throws, {team2_detail.cascade_kicks} Kicks")
     
@@ -203,6 +284,216 @@ def build_game_context(game_result, week, game_num, game_type="game"):
         context_parts.append(player_data)
     
     return "\n".join(context_parts)
+
+
+def remove_continuation_markers(text):
+    """
+    Remove continuation markers like '...' prefixes from text.
+    """
+    if not text:
+        return text
+    
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        # Remove lines that start with "..." (continuation markers)
+        stripped = line.strip()
+        if stripped.startswith('...'):
+            continue
+        # Remove "..." from the start of lines but keep the rest
+        cleaned_line = line
+        if cleaned_line.strip().startswith('...'):
+            cleaned_line = cleaned_line.replace('...', '', 1).lstrip()
+        cleaned_lines.append(cleaned_line)
+    
+    return '\n'.join(cleaned_lines)
+
+
+def remove_incomplete_sentences(text):
+    """
+    Remove sentences that don't end with proper punctuation (. ! ?).
+    This helps catch truncated responses.
+    """
+    if not text:
+        return text
+    
+    # Split text into paragraphs
+    paragraphs = text.split('\n\n')
+    cleaned_paragraphs = []
+    
+    for para in paragraphs:
+        if not para.strip():
+            cleaned_paragraphs.append(para)
+            continue
+        
+        # Split into sentences (simple approach - look for sentence endings)
+        sentences = []
+        current_sentence = ""
+        
+        # Simple sentence splitting - look for . ! ? followed by space or newline
+        # Find sentence boundaries
+        sentence_endings = re.finditer(r'[.!?]\s+', para)
+        last_end = 0
+        
+        for match in sentence_endings:
+            end_pos = match.end()
+            sentence = para[last_end:end_pos].strip()
+            if sentence:
+                sentences.append(sentence)
+            last_end = end_pos
+        
+        # Handle remaining text after last sentence ending
+        remaining = para[last_end:].strip()
+        if remaining:
+            # If it ends with proper punctuation, include it
+            if remaining[-1] in '.!?':
+                sentences.append(remaining)
+            # Otherwise, it's incomplete - check if it's substantial enough
+            # If it's very short (less than 20 chars), likely truncated - skip it
+            elif len(remaining) < 20:
+                # Skip short incomplete sentences
+                pass
+            else:
+                # Longer incomplete might be intentional (like a list), include it
+                sentences.append(remaining)
+        
+        if sentences:
+            cleaned_paragraphs.append(' '.join(sentences))
+        # If no complete sentences but paragraph exists, check if it's substantial
+        elif len(para.strip()) >= 50:
+            # Keep substantial paragraphs even if no sentence endings found
+            cleaned_paragraphs.append(para)
+    
+    return '\n\n'.join(cleaned_paragraphs)
+
+
+def remove_duplicate_paragraphs(text):
+    """
+    Remove duplicate paragraphs using fuzzy matching.
+    Detects when the same or very similar text appears multiple times.
+    """
+    if not text:
+        return text
+    
+    paragraphs = text.split('\n\n')
+    seen_paragraphs = []
+    cleaned_paragraphs = []
+    
+    for para in paragraphs:
+        para_stripped = para.strip()
+        if not para_stripped:
+            cleaned_paragraphs.append(para)
+            continue
+        
+        # Check for duplicates - compare normalized versions
+        para_normalized = ' '.join(para_stripped.split()).lower()
+        
+        # Check if we've seen this exact paragraph before
+        is_duplicate = False
+        for seen in seen_paragraphs:
+            seen_normalized = ' '.join(seen.split()).lower()
+            
+            # Exact match
+            if para_normalized == seen_normalized:
+                is_duplicate = True
+                break
+            
+            # Check if one is a substring of the other (fuzzy duplicate detection)
+            # If one paragraph is 80% similar to another, consider it a duplicate
+            similarity = calculate_similarity(para_normalized, seen_normalized)
+            if similarity > 0.8:
+                is_duplicate = True
+                break
+            
+            # Check if current para starts with a previous para (incomplete followed by complete)
+            if para_normalized.startswith(seen_normalized[:50]) and len(para_normalized) > len(seen_normalized) * 1.2:
+                # Current is longer and starts similarly - likely complete version of incomplete
+                # Remove the shorter previous version
+                if len(para_normalized) > len(seen_normalized):
+                    # This is the complete version, mark previous as duplicate
+                    # We'll handle this by not adding current if it's a superset
+                    pass
+                is_duplicate = False  # Don't mark as duplicate, it's an improvement
+                break
+        
+        if not is_duplicate:
+            seen_paragraphs.append(para_normalized)
+            cleaned_paragraphs.append(para)
+    
+    return '\n\n'.join(cleaned_paragraphs)
+
+
+def calculate_similarity(str1, str2):
+    """
+    Calculate simple similarity ratio between two strings.
+    Returns a value between 0 and 1.
+    """
+    if not str1 or not str2:
+        return 0.0
+    
+    # Use simple word overlap for similarity
+    words1 = set(str1.split())
+    words2 = set(str2.split())
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    
+    return len(intersection) / len(union) if union else 0.0
+
+
+def validate_segment_completeness(text):
+    """
+    Check if a segment appears complete.
+    Returns (is_complete, reason) tuple.
+    """
+    if not text or len(text.strip()) < 50:
+        return False, "Segment too short"
+    
+    # Check if text ends with proper sentence ending
+    text_stripped = text.strip()
+    if text_stripped[-1] not in '.!?':
+        # Might be incomplete, but check context
+        # If it ends with a complete word (space before last word), might be okay
+        words = text_stripped.split()
+        if len(words) < 10:
+            return False, "Segment ends without punctuation and is very short"
+    
+    # Check for obvious truncation markers
+    if text_stripped.endswith('...') or '...' in text_stripped[-20:]:
+        return False, "Contains truncation markers"
+    
+    return True, "Appears complete"
+
+
+def clean_generated_text(text):
+    """
+    Main cleanup function that applies all text cleaning operations.
+    """
+    if not text:
+        return text
+    
+    # Step 1: Remove continuation markers
+    cleaned = remove_continuation_markers(text)
+    
+    # Step 2: Remove duplicate paragraphs
+    cleaned = remove_duplicate_paragraphs(cleaned)
+    
+    # Step 3: Remove incomplete sentences (this is more aggressive)
+    cleaned = remove_incomplete_sentences(cleaned)
+    
+    # Step 4: Normalize whitespace (multiple spaces to single, but preserve paragraph breaks)
+    # Normalize multiple spaces to single space within lines
+    lines = cleaned.split('\n')
+    normalized_lines = [re.sub(r' +', ' ', line) for line in lines]
+    cleaned = '\n'.join(normalized_lines)
+    
+    # Remove excessive blank lines (more than 2 consecutive)
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    
+    return cleaned.strip()
 
 
 def generate_segment_prompt(segment_type, game_context, rulebook_summary, previous_segment=None):
@@ -286,6 +577,68 @@ RULEBOOK SUMMARY:
     return prompt
 
 
+def extract_text_from_response(response):
+    """
+    Extract text from Gemini API response with improved handling of edge cases.
+    Returns the extracted text or None if extraction fails.
+    """
+    if response is None:
+        return None
+    
+    try:
+        # Try direct text attribute first (most common case)
+        if hasattr(response, 'text') and response.text:
+            return response.text.strip()
+        
+        # Try candidates structure
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            
+            # Check for finish_reason to detect truncation
+            if hasattr(candidate, 'finish_reason'):
+                finish_reason = candidate.finish_reason
+                if finish_reason and 'length' in str(finish_reason).lower():
+                    logger.warning("Response was truncated due to length limit")
+            
+            # Try content.parts structure
+            if hasattr(candidate, 'content'):
+                content = candidate.content
+                if hasattr(content, 'parts') and content.parts:
+                    text_parts = []
+                    for part in content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            text_parts.append(part.text.strip())
+                        elif hasattr(part, 'content') and part.content:
+                            # Some parts might have nested content
+                            text_parts.append(str(part.content).strip())
+                    
+                    if text_parts:
+                        # Join parts, but be careful about duplicates
+                        combined = ' '.join(text_parts)
+                        return combined.strip()
+                
+                # Try direct text attribute on content
+                if hasattr(content, 'text') and content.text:
+                    return content.text.strip()
+            
+            # Try direct text on candidate
+            if hasattr(candidate, 'text') and candidate.text:
+                return candidate.text.strip()
+        
+        # Fallback: try to stringify and extract meaningful text
+        response_str = str(response)
+        # If it looks like there's actual text content (not just object representation)
+        if len(response_str) > 100 and not response_str.startswith('<'):
+            return response_str.strip()
+        
+        logger.warning("Could not extract text from response - unexpected structure")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error extracting text from response: {e}")
+        return None
+
+
 def generate_game_script_with_gemini(game_result, rulebook_text, week, game_num, game_type="game"):
     """
     Generate segmented podcast script using Gemini.
@@ -296,16 +649,11 @@ def generate_game_script_with_gemini(game_result, rulebook_text, week, game_num,
     
     try:
         api_key = load_gemini_api_key()
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         
-        # Select Model
-        model_name = "gemini-2.0-flash-exp"
-        try:
-            model = genai.GenerativeModel(model_name)
-        except Exception:
-            logger.warning(f"Model {model_name} not available, trying gemini-pro")
-            model_name = "gemini-pro"
-            model = genai.GenerativeModel(model_name)
+        # Select Model - Use gemini-2.5-flash for higher quota limits
+        # Error message suggests gemini-2.5-flash-image for higher quotas
+        model_name = "gemini-2.5-flash"
 
         game_context = build_game_context(game_result, week, game_num, game_type)
         rulebook_summary = rulebook_text[:1000] if rulebook_text else "Cascade: Runs(3/6), Throws(2/4), Kicks(1/2)."
@@ -318,23 +666,74 @@ def generate_game_script_with_gemini(game_result, rulebook_text, week, game_num,
             logger.info(f"Generating {segment} segment...")
             prompt = generate_segment_prompt(segment, game_context, rulebook_summary, previous_text)
 
-            response = model.generate_content(
-                prompt,
-                generation_config={
-                    "temperature": 0.7, # Slightly lower temperature for more coherent reporting
-                    "top_p": 0.9,
-                    "max_output_tokens": 2000,
-                }
-            )
-
-            segment_text = response.text.strip()
+            # Try to generate content with fallback models if needed
+            response = None
+            fallback_models = ["gemini-2.5-flash", "gemini-2.5-flash-image", "gemini-2.0-flash-exp", "gemini-pro"]
+            max_retries = 2
+            segment_text = None
+            
+            for try_model in fallback_models:
+                for attempt in range(max_retries):
+                    try:
+                        response = client.models.generate_content(
+                            model=try_model,
+                            contents=[prompt],
+                            config={
+                                "temperature": 0.7, # Slightly lower temperature for more coherent reporting
+                                "top_p": 0.9,
+                                "max_output_tokens": 3500,  # Increased from 2000 to allow longer segments
+                            }
+                        )
+                        model_name = try_model  # Update model_name for next segment
+                        
+                        # Extract text from response with improved handling
+                        extracted_text = extract_text_from_response(response)
+                        if extracted_text:
+                            # Clean the extracted text
+                            extracted_text = clean_generated_text(extracted_text)
+                            
+                            # Validate completeness
+                            is_complete, reason = validate_segment_completeness(extracted_text)
+                            if is_complete or attempt == max_retries - 1:
+                                segment_text = extracted_text
+                                if not is_complete:
+                                    logger.warning(f"Segment {segment} validation: {reason}, but using anyway (final attempt)")
+                                break
+                            else:
+                                logger.warning(f"Segment {segment} appears incomplete: {reason}. Retrying...")
+                                continue
+                        
+                        break  # Successfully extracted, break out of retry loop
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            logger.warning(f"Model {try_model} failed after {max_retries} attempts ({e}), trying next model...")
+                        else:
+                            logger.warning(f"Model {try_model} failed on attempt {attempt + 1} ({e}), retrying...")
+                            time.sleep(0.5)  # Brief pause before retry
+                        continue
+                
+                if segment_text:
+                    break  # Successfully got text, break out of model loop
+            
+            if not segment_text:
+                logger.error("All Gemini models failed or produced invalid responses. Cannot generate segment.")
+                return None
+            
+            # Apply cleanup again to ensure quality
+            segment_text = clean_generated_text(segment_text)
             full_script.append(segment_text)
             previous_text = segment_text
 
             # Rate limiting/pause between segments
             time.sleep(1)
 
+        # Combine all segments
         final_script = "\n\n".join(full_script)
+        
+        # Apply final cleanup pass to the entire script
+        # This helps catch any cross-segment duplicates or issues
+        final_script = clean_generated_text(final_script)
+        
         word_count = len(final_script.split())
         logger.info(f"Generated complete script: {word_count} words.")
         
@@ -363,12 +762,19 @@ def generate_game_script(game_result, rulebook_text, week, game_num, use_gemini=
 def generate_week_podcast_script(game_results_by_week, week, rulebook_text, use_gemini=True):
     """
     Generate scripts for all games in a week.
+    
+    Returns:
+        tuple: (combined_script, individual_scripts, game_results_by_num)
+        - combined_script: Full combined script text
+        - individual_scripts: Dict mapping game_num to script text
+        - game_results_by_num: Dict mapping game_num to game_result dict
     """
     if week not in game_results_by_week:
-        return "", {}
+        return "", {}, {}
     
     week_games = game_results_by_week[week]
     individual_scripts = {}
+    game_results_by_num = {}
     combined_parts = []
     
     # Filter valid games
@@ -394,10 +800,11 @@ def generate_week_podcast_script(game_results_by_week, week, rulebook_text, use_
         logger.info(f"Generating script for Game {game_num}...")
         script = generate_game_script(game_result, rulebook_text, week, game_num, use_gemini)
         individual_scripts[game_num] = script
+        game_results_by_num[game_num] = game_result
         combined_parts.append(script)
         combined_parts.append("\n---\n")
         game_num += 1
 
     combined_parts.append("This concludes our report for this week. Thank you for listening.")
 
-    return "\n".join(combined_parts), individual_scripts
+    return "\n".join(combined_parts), individual_scripts, game_results_by_num

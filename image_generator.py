@@ -189,6 +189,129 @@ def draw_text_with_shadow(draw, xy, text, font, fill='#ffffff', shadow_color='#0
     draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
 
 
+def _get_player_display_name(player_stats):
+    """Extract display name from player stats dict"""
+    return player_stats.get('player_name') or player_stats.get('name') or 'Unknown'
+
+
+def _render_player_stats_table(draw, x, y, width, player_stats_dict, team_name, max_players=7, 
+                               name_font=None, stat_font=None, header_font=None, season_stats_dict=None):
+    """
+    Render a player stats table in ESPN style.
+    
+    Args:
+        draw: ImageDraw object
+        x, y: Top-left position
+        width: Table width
+        player_stats_dict: Dict of player_id -> stats
+        team_name: Team name for header
+        max_players: Maximum number of players to show
+        name_font, stat_font, header_font: Font objects
+        season_stats_dict: Optional dict of player_name -> season stats
+    """
+    if not player_stats_dict:
+        return y
+    
+    # Sort players by points (descending)
+    sorted_players = sorted(
+        player_stats_dict.items(),
+        key=lambda item: item[1].get('points', 0),
+        reverse=True
+    )[:max_players]
+    
+    if not sorted_players:
+        return y
+    
+    # Table dimensions
+    row_height = 40
+    header_height = 35
+    padding = 15
+    
+    # Header background
+    header_bg = Image.new('RGBA', (width, header_height), (0, 0, 0, 180))
+    draw._image.paste(header_bg, (x, y), header_bg)
+    
+    # Header text
+    if header_font:
+        draw_text_with_shadow(draw, (x + width//2, y + header_height//2), team_name, header_font, 
+                             fill='#ffffff', anchor="mm", shadow_offset=(2, 2))
+    
+    # Column positions
+    name_x = x + padding
+    points_x = x + width - 280
+    runs_x = x + width - 220
+    throws_x = x + width - 150
+    kicks_x = x + width - 80
+    
+    # Column headers
+    header_y = y + header_height + 5
+    if header_font:
+        header_size = int(header_font.size * 0.7) if hasattr(header_font, 'size') else 14
+        small_header_font = load_font(FONT_PATHS_REGULAR, header_size)
+        draw_text_with_shadow(draw, (points_x, header_y), "PTS", small_header_font, fill='#aaaaaa', anchor="lm")
+        draw_text_with_shadow(draw, (runs_x, header_y), "R", small_header_font, fill='#aaaaaa', anchor="lm")
+        draw_text_with_shadow(draw, (throws_x, header_y), "T", small_header_font, fill='#aaaaaa', anchor="lm")
+        draw_text_with_shadow(draw, (kicks_x, header_y), "K", small_header_font, fill='#aaaaaa', anchor="lm")
+    
+    # Player rows
+    current_y = header_y + 25
+    for idx, (player_id, stats) in enumerate(sorted_players):
+        player_name = _get_player_display_name(stats)
+        
+        # Highlight top performer
+        is_top = (idx == 0)
+        if is_top:
+            row_bg = Image.new('RGBA', (width, row_height), (26, 46, 58, 200))
+        else:
+            row_bg = Image.new('RGBA', (width, row_height), (15, 20, 25, 180))
+        draw._image.paste(row_bg, (x, current_y - 5), row_bg)
+        
+        # Player name (truncate if too long)
+        display_name = player_name[:18] + "..." if len(player_name) > 18 else player_name
+        name_color = '#4ecdc4' if is_top else '#ffffff'
+        if name_font:
+            draw_text_with_shadow(draw, (name_x, current_y + row_height//2), display_name, name_font, 
+                                 fill=name_color, anchor="lm", shadow_offset=(1, 1))
+        
+        # Points (highlighted)
+        points = stats.get('points', 0)
+        points_color = '#10b981' if points > 0 else '#888888'
+        if stat_font:
+            draw_text_with_shadow(draw, (points_x, current_y + row_height//2), str(points), stat_font, 
+                                 fill=points_color, anchor="lm", shadow_offset=(1, 1))
+        
+        # Runs (completed/attempted)
+        runs_comp = stats.get('runs_completed', 0)
+        runs_att = stats.get('runs_attempted', 0)
+        runs_text = f"{runs_comp}/{runs_att}"
+        runs_color = '#4ecdc4' if runs_comp > 0 else '#666666'
+        if stat_font:
+            draw_text_with_shadow(draw, (runs_x, current_y + row_height//2), runs_text, stat_font, 
+                                 fill=runs_color, anchor="lm", shadow_offset=(1, 1))
+        
+        # Throws (completed/attempted)
+        throws_comp = stats.get('throws_completed', 0)
+        throws_att = stats.get('throws_attempted', 0)
+        throws_text = f"{throws_comp}/{throws_att}"
+        throws_color = '#4ecdc4' if throws_comp > 0 else '#666666'
+        if stat_font:
+            draw_text_with_shadow(draw, (throws_x, current_y + row_height//2), throws_text, stat_font, 
+                                 fill=throws_color, anchor="lm", shadow_offset=(1, 1))
+        
+        # Kicks (completed/attempted)
+        kicks_comp = stats.get('kicks_completed', 0)
+        kicks_att = stats.get('kicks_attempted', 0)
+        kicks_text = f"{kicks_comp}/{kicks_att}"
+        kicks_color = '#4ecdc4' if kicks_comp > 0 else '#666666'
+        if stat_font:
+            draw_text_with_shadow(draw, (kicks_x, current_y + row_height//2), kicks_text, stat_font, 
+                                 fill=kicks_color, anchor="lm", shadow_offset=(1, 1))
+        
+        current_y += row_height
+    
+    return current_y + 10
+
+
 
 def apply_logo_to_rectangle(img, logo_image, rect_coords, opacity=0.18):
     """
@@ -252,11 +375,23 @@ def apply_logo_to_rectangle(img, logo_image, rect_coords, opacity=0.18):
     img.paste(overlay, (left, top), overlay)
 
 
-def generate_game_image(game_result, filename, game_type="game", week=None, game_number=None):
-    """Generate a game scoreboard image with team logos and scores - modern sports broadcast style"""
+def generate_game_image(game_result, filename, game_type="game", week=None, game_number=None, season_id=None):
+    """Generate a game scoreboard image with team logos and scores - modern 2025 Instagram ESPN style"""
     try:
-        # Create taller image to accommodate player scorecards
-        width, height = 1600, 2400
+        # Fetch team analytics if season_id is provided
+        team_analytics = None
+        if season_id:
+            try:
+                import webapp_bridge
+                team1_name = game_result['team1'].name
+                team2_name = game_result['team2'].name
+                team_analytics = webapp_bridge.get_team_analytics(team1_name, team2_name, season_id)
+            except Exception as e:
+                # If analytics fetch fails, continue without them
+                print(f"Warning: Could not fetch team analytics: {e}")
+        
+        # Create modern scoreboard image (1:1 for Instagram feed, but taller to fit player stats)
+        width, height = 1600, 2000
         
         # Get team scores early to determine winner for background theme
         team1 = game_result['team1']
@@ -303,395 +438,457 @@ def generate_game_image(game_result, filename, game_type="game", week=None, game
             winner = team1
             loser = team2
         
-        # Start with a very dark base (extract from logo if available, otherwise use dark color)
-        if winning_team_logo:
-            # Extract a dark version of the dominant color for base
-            dominant_color = extract_dominant_color(winning_team_logo)
-            # Darken it significantly for base
-            base_r = max(5, dominant_color[0] // 8)
-            base_g = max(5, dominant_color[1] // 8)
-            base_b = max(5, dominant_color[2] // 8)
-            base_color = (base_r, base_g, base_b)
-        else:
-            base_color = (5, 5, 16)  # Very dark blue
-        
-        # Create image with dark base
-        img = Image.new('RGB', (width, height), color=base_color)
+        # Modern 2025 Instagram ESPN Style Design
+        # Create dark gradient background
+        img = Image.new('RGB', (width, height), color='#0a0a1a')
         draw = ImageDraw.Draw(img)
         
-        # Apply winner's logo as the primary background (before any overlays)
-        apply_translucent_logo_background(img, winning_team_logo, width, height)
+        # Draw gradient background
+        draw_gradient_background(img, width, height, '#0a0a1a', '#1a1a2e', 'vertical')
         
-        # Add a very subtle dark overlay for overall depth (only if logo exists)
+        # Apply subtle winner logo background
         if winning_team_logo:
-            dark_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 40))  # Very subtle darkening
+            apply_translucent_logo_background(img, winning_team_logo, width, height)
+            dark_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 60))
             img.paste(dark_overlay, (0, 0), dark_overlay)
         
-        # Load fonts with cross-platform fallbacks
-        title_font = load_font(FONT_PATHS_BOLD, 64)
+        # Load modern fonts
+        title_font = load_font(FONT_PATHS_BOLD, 48)
         score_font = load_font(FONT_PATHS_BOLD, 220)
-        team_font = load_font(FONT_PATHS_BOLD, 56)
-        stat_label_font = load_font(FONT_PATHS_REGULAR, 36)
-        stat_value_font = load_font(FONT_PATHS_BOLD, 48)
-        vs_font = load_font(FONT_PATHS_BOLD, 48)
-        legend_font = load_font(FONT_PATHS_REGULAR, 24)
-        player_name_font = load_font(FONT_PATHS_BOLD, 20)
-        player_stat_font = load_font(FONT_PATHS_REGULAR, 16)
-        player_label_font = load_font(FONT_PATHS_REGULAR, 14)
-        table_header_font = load_font(FONT_PATHS_BOLD, 28)
-        table_row_font = load_font(FONT_PATHS_REGULAR, 22)
-        table_stat_font = load_font(FONT_PATHS_REGULAR, 20)
-        team_name_font = load_font(FONT_PATHS_BOLD, 32)  # For team name in scoreboard header
+        team_font = load_font(FONT_PATHS_BOLD, 64)
+        analytics_label_font = load_font(FONT_PATHS_REGULAR, 24)
+        analytics_value_font = load_font(FONT_PATHS_BOLD, 32)
+        stat_label_font = load_font(FONT_PATHS_REGULAR, 28)
+        stat_value_font = load_font(FONT_PATHS_BOLD, 36)
         
         team1_detail = game_result['team1_detail']
         team2_detail = game_result['team2_detail']
         
-        # Logo size for display in cards
-        logo_size = 300
+        # Get analytics data
+        team1_stats = team_analytics['team1_stats'] if team_analytics else None
+        team2_stats = team_analytics['team2_stats'] if team_analytics else None
         
-        # Draw "Glass Cards" for teams
+        # Header section
+        header_height = 120
+        header_overlay = Image.new('RGBA', (width, header_height), (0, 0, 0, 220))
+        img.paste(header_overlay, (0, 0), header_overlay)
+        
+        # Title
+        title = f"{game_type.replace('_', ' ').title()}"
+        if week:
+            title = f"Week {week}"
+        elif game_number:
+            title = f"{title} {game_number}"
+        draw_text_with_shadow(draw, (width//2, 60), title, title_font, fill='#ffffff', anchor="mm")
+        
+        # Main scoreboard section - horizontal layout
+        scoreboard_y = header_height + 40
+        scoreboard_height = 900
+        logo_size = 280
+        
+        # Team 1 section (left)
+        team1_x = 80
+        team1_width = 680
+        
+        # Team 2 section (right)
+        team2_x = 840
+        team2_width = 680
+        
+        # Create glassmorphism cards
         overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
         
-        # Card dimensions
-        card_width = 650
-        card_height = 1000
-        card_y = 350
-        card1_x = 100
-        card2_x = width - 100 - card_width
+        # Glass card for team 1 - ESPN blue accent
+        glass_fill = (20, 30, 50, 200)
+        glass_border = (0, 51, 160, 180)  # ESPN blue
+        overlay_draw.rounded_rectangle(
+            [team1_x, scoreboard_y, team1_x + team1_width, scoreboard_y + scoreboard_height],
+            radius=25, fill=glass_fill, outline=glass_border, width=3
+        )
         
-        # Glass effect style
-        glass_fill = (20, 30, 50, 180)  # Dark blue-ish semi-transparent
-        glass_border = (78, 205, 196, 100)  # Teal border
-        
-        # Draw cards
-        overlay_draw.rounded_rectangle([card1_x, card_y, card1_x + card_width, card_y + card_height], 
-                                      radius=20, fill=glass_fill, outline=glass_border, width=2)
-        overlay_draw.rounded_rectangle([card2_x, card_y, card2_x + card_width, card_y + card_height], 
-                                      radius=20, fill=glass_fill, outline=glass_border, width=2)
-        
-        # Title Background
-        overlay_draw.rectangle([0, 0, width, 180], fill=(0, 0, 0, 200))
+        # Glass card for team 2 - ESPN orange accent
+        overlay_draw.rounded_rectangle(
+            [team2_x, scoreboard_y, team2_x + team2_width, scoreboard_y + scoreboard_height],
+            radius=25, fill=glass_fill, outline=(255, 102, 0, 180), width=3  # ESPN orange
+        )
         
         img.paste(overlay, (0, 0), overlay)
-        
-        # Recreate draw object
         draw = ImageDraw.Draw(img)
         
-        # Draw title
-        title = f"{game_type.replace('_', ' ').title()}"
-        if week:
-            title = f"Week {week} - {title}"
-        elif game_number:
-            title = f"{title} {game_number}"
-            
-        draw_text_with_shadow(draw, (width//2, 90), title, title_font, anchor="mm")
-        
-        # --- Team 1 Content ---
-        # Logo
+        # --- Team 1 Rendering ---
+        team1_logo_y = scoreboard_y + 50
         if logo1_original:
-            logo1 = logo1_original.resize((200, 200), Image.Resampling.LANCZOS)
-            logo_x = card1_x + (card_width - 200) // 2
-            logo_y = card_y + 40
-            img.paste(logo1, (logo_x, logo_y), logo1)
+            logo1 = logo1_original.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            logo1_x = team1_x + (team1_width - logo_size) // 2
+            img.paste(logo1, (logo1_x, team1_logo_y), logo1)
         
-        # Name
-        team1_name_y = card_y + 260
-        draw_text_with_shadow(draw, (card1_x + card_width//2, team1_name_y), team1.name, team_font, anchor="mm")
+        # Team name
+        team1_name_y = team1_logo_y + logo_size + 30
+        draw_text_with_shadow(draw, (team1_x + team1_width//2, team1_name_y), team1.name, team_font, fill='#ffffff', anchor="mm")
         
-        # Score
-        score_y = team1_name_y + 140
-        draw_text_with_shadow(draw, (card1_x + card_width//2, score_y), str(team1_score), score_font, anchor="mm")
+        # Score (large and bold)
+        score1_y = team1_name_y + 100
+        draw_text_with_shadow(draw, (team1_x + team1_width//2, score1_y), str(team1_score), score_font, fill='#ffffff', anchor="mm")
         
-        # Stats
-        stats_start_y = score_y + 160
-        stat_spacing = 80
+        # Analytics section
+        analytics_y = score1_y + 180
+        analytics_spacing = 50
         
-        # Helper for stats
-        def draw_stat_row(x, y, label, value, cascade_count, width):
-            label_text = label
-            value_text = str(value)
+        if team1_stats:
+            # Record badge
+            record_text = f"{team1_stats['wins']}-{team1_stats['losses']}"
+            draw_text_with_shadow(draw, (team1_x + 30, analytics_y), "RECORD", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team1_x + team1_width - 30, analytics_y), record_text, analytics_value_font, fill='#10b981', anchor="rm")
             
-            # Use fixed offsets from center
-            center = x + width // 2
-            draw_text_with_shadow(draw, (center - 20, y), label_text, stat_label_font, fill='#aaaaaa', anchor="rm")
-            draw_text_with_shadow(draw, (center + 20, y), value_text, stat_value_font, anchor="lm")
+            # Win %
+            win_pct_y = analytics_y + analytics_spacing
+            win_pct_text = f"{team1_stats['win_percentage']}%"
+            draw_text_with_shadow(draw, (team1_x + 30, win_pct_y), "WIN %", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team1_x + team1_width - 30, win_pct_y), win_pct_text, analytics_value_font, fill='#ffffff', anchor="rm")
             
-            # Cascade circles
-            if cascade_count > 0:
-                circle_radius = 8
-                circle_spacing = 8
-                # Position to right of value
-                value_bbox = draw.textbbox((0, 0), value_text, font=stat_value_font)
-                value_width = value_bbox[2] - value_bbox[0]
-                circle_start_x = center + 20 + value_width + 25
-                
-                for i in range(cascade_count):
-                    circle_x = circle_start_x + i * (circle_radius * 2 + circle_spacing)
-                    draw.ellipse([circle_x - circle_radius, y - circle_radius, 
-                                 circle_x + circle_radius, y + circle_radius], 
-                                fill='#ffd93d', outline='#ffffff', width=1)
-
-        draw_stat_row(card1_x, stats_start_y, "RUNS", team1_detail.runs, team1_detail.cascade_runs, card_width)
-        draw_stat_row(card1_x, stats_start_y + stat_spacing, "THROWS", team1_detail.throws, team1_detail.cascade_throws, card_width)
-        draw_stat_row(card1_x, stats_start_y + stat_spacing * 2, "KICKS", team1_detail.kicks, team1_detail.cascade_kicks, card_width)
-
-        # --- Team 2 Content ---
-        # Logo
+            # PPG
+            ppg_y = win_pct_y + analytics_spacing
+            ppg_text = f"{team1_stats['avg_points_for']:.1f}"
+            draw_text_with_shadow(draw, (team1_x + 30, ppg_y), "PPG", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team1_x + team1_width - 30, ppg_y), ppg_text, analytics_value_font, fill='#4ecdc4', anchor="rm")
+            
+            # Point Differential
+            diff_y = ppg_y + analytics_spacing
+            diff = team1_stats['point_differential']
+            diff_text = f"{'+' if diff >= 0 else ''}{diff}"
+            diff_color = '#10b981' if diff >= 0 else '#ef4444'
+            draw_text_with_shadow(draw, (team1_x + 30, diff_y), "DIFF", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team1_x + team1_width - 30, diff_y), diff_text, analytics_value_font, fill=diff_color, anchor="rm")
+        else:
+            # Fallback if no analytics
+            draw_text_with_shadow(draw, (team1_x + team1_width//2, analytics_y), "Season Stats", analytics_label_font, fill='#666666', anchor="mm")
+        
+        # Game stats
+        game_stats_y = analytics_y + (analytics_spacing * 4) + 40
+        game_stat_spacing = 50
+        
+        # Runs
+        draw_text_with_shadow(draw, (team1_x + 30, game_stats_y), "RUNS", stat_label_font, fill='#aaaaaa', anchor="lm")
+        runs_text = str(team1_detail.runs)
+        if team1_detail.cascade_runs > 0:
+            runs_text += f" ({team1_detail.cascade_runs}*)"
+        draw_text_with_shadow(draw, (team1_x + team1_width - 30, game_stats_y), runs_text, stat_value_font, fill='#4ecdc4', anchor="rm")
+        
+        # Throws
+        throw_y = game_stats_y + game_stat_spacing
+        draw_text_with_shadow(draw, (team1_x + 30, throw_y), "THROWS", stat_label_font, fill='#aaaaaa', anchor="lm")
+        throws_text = str(team1_detail.throws)
+        if team1_detail.cascade_throws > 0:
+            throws_text += f" ({team1_detail.cascade_throws}*)"
+        draw_text_with_shadow(draw, (team1_x + team1_width - 30, throw_y), throws_text, stat_value_font, fill='#4ecdc4', anchor="rm")
+        
+        # Kicks
+        kick_y = throw_y + game_stat_spacing
+        draw_text_with_shadow(draw, (team1_x + 30, kick_y), "KICKS", stat_label_font, fill='#aaaaaa', anchor="lm")
+        kicks_text = str(team1_detail.kicks)
+        if team1_detail.cascade_kicks > 0:
+            kicks_text += f" ({team1_detail.cascade_kicks}*)"
+        draw_text_with_shadow(draw, (team1_x + team1_width - 30, kick_y), kicks_text, stat_value_font, fill='#4ecdc4', anchor="rm")
+        
+        # --- Team 2 Rendering ---
         if logo2_original:
-            logo2 = logo2_original.resize((200, 200), Image.Resampling.LANCZOS)
-            logo_x = card2_x + (card_width - 200) // 2
-            logo_y = card_y + 40
-            img.paste(logo2, (logo_x, logo_y), logo2)
+            logo2 = logo2_original.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            logo2_x = team2_x + (team2_width - logo_size) // 2
+            img.paste(logo2, (logo2_x, team1_logo_y), logo2)
         
-        # Name
-        team2_name_y = card_y + 260
-        draw_text_with_shadow(draw, (card2_x + card_width//2, team2_name_y), team2.name, team_font, anchor="mm")
+        # Team name
+        draw_text_with_shadow(draw, (team2_x + team2_width//2, team1_name_y), team2.name, team_font, fill='#ffffff', anchor="mm")
         
         # Score
-        score_y = team2_name_y + 140
-        draw_text_with_shadow(draw, (card2_x + card_width//2, score_y), str(team2_score), score_font, anchor="mm")
+        draw_text_with_shadow(draw, (team2_x + team2_width//2, score1_y), str(team2_score), score_font, fill='#ffffff', anchor="mm")
         
-        # Stats
-        draw_stat_row(card2_x, stats_start_y, "RUNS", team2_detail.runs, team2_detail.cascade_runs, card_width)
-        draw_stat_row(card2_x, stats_start_y + stat_spacing, "THROWS", team2_detail.throws, team2_detail.cascade_throws, card_width)
-        draw_stat_row(card2_x, stats_start_y + stat_spacing * 2, "KICKS", team2_detail.kicks, team2_detail.cascade_kicks, card_width)
+        # Analytics section
+        if team2_stats:
+            # Record badge
+            record_text = f"{team2_stats['wins']}-{team2_stats['losses']}"
+            draw_text_with_shadow(draw, (team2_x + 30, analytics_y), "RECORD", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team2_x + team2_width - 30, analytics_y), record_text, analytics_value_font, fill='#10b981', anchor="rm")
+            
+            # Win %
+            win_pct_text = f"{team2_stats['win_percentage']}%"
+            draw_text_with_shadow(draw, (team2_x + 30, win_pct_y), "WIN %", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team2_x + team2_width - 30, win_pct_y), win_pct_text, analytics_value_font, fill='#ffffff', anchor="rm")
+            
+            # PPG
+            ppg_text = f"{team2_stats['avg_points_for']:.1f}"
+            draw_text_with_shadow(draw, (team2_x + 30, ppg_y), "PPG", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team2_x + team2_width - 30, ppg_y), ppg_text, analytics_value_font, fill='#4ecdc4', anchor="rm")
+            
+            # Point Differential
+            diff = team2_stats['point_differential']
+            diff_text = f"{'+' if diff >= 0 else ''}{diff}"
+            diff_color = '#10b981' if diff >= 0 else '#ef4444'
+            draw_text_with_shadow(draw, (team2_x + 30, diff_y), "DIFF", analytics_label_font, fill='#aaaaaa', anchor="lm")
+            draw_text_with_shadow(draw, (team2_x + team2_width - 30, diff_y), diff_text, analytics_value_font, fill=diff_color, anchor="rm")
+        else:
+            draw_text_with_shadow(draw, (team2_x + team2_width//2, analytics_y), "Season Stats", analytics_label_font, fill='#666666', anchor="mm")
+        
+        # Game stats
+        # Runs
+        draw_text_with_shadow(draw, (team2_x + 30, game_stats_y), "RUNS", stat_label_font, fill='#aaaaaa', anchor="lm")
+        runs_text = str(team2_detail.runs)
+        if team2_detail.cascade_runs > 0:
+            runs_text += f" ({team2_detail.cascade_runs}*)"
+        draw_text_with_shadow(draw, (team2_x + team2_width - 30, game_stats_y), runs_text, stat_value_font, fill='#4ecdc4', anchor="rm")
+        
+        # Throws
+        draw_text_with_shadow(draw, (team2_x + 30, throw_y), "THROWS", stat_label_font, fill='#aaaaaa', anchor="lm")
+        throws_text = str(team2_detail.throws)
+        if team2_detail.cascade_throws > 0:
+            throws_text += f" ({team2_detail.cascade_throws}*)"
+        draw_text_with_shadow(draw, (team2_x + team2_width - 30, throw_y), throws_text, stat_value_font, fill='#4ecdc4', anchor="rm")
+        
+        # Kicks
+        draw_text_with_shadow(draw, (team2_x + 30, kick_y), "KICKS", stat_label_font, fill='#aaaaaa', anchor="lm")
+        kicks_text = str(team2_detail.kicks)
+        if team2_detail.cascade_kicks > 0:
+            kicks_text += f" ({team2_detail.cascade_kicks}*)"
+        draw_text_with_shadow(draw, (team2_x + team2_width - 30, kick_y), kicks_text, stat_value_font, fill='#4ecdc4', anchor="rm")
+        
+        # Player Stats Section
+        player_stats_y = kick_y + game_stat_spacing + 60
+        player_stats_height = 400
+        
+        # Fetch player season stats if available
+        player_season_stats = {}
+        if season_id:
+            try:
+                import webapp_bridge
+                team1_player_stats = game_result.get('team1_player_stats', {})
+                team2_player_stats = game_result.get('team2_player_stats', {})
+                
+                # Get season stats for all players
+                for player_id, stats in team1_player_stats.items():
+                    player_name = _get_player_display_name(stats)
+                    season_stats = webapp_bridge.get_player_season_stats(player_name, team1.name, season_id)
+                    if season_stats:
+                        player_season_stats[player_name] = season_stats
+                
+                for player_id, stats in team2_player_stats.items():
+                    player_name = _get_player_display_name(stats)
+                    season_stats = webapp_bridge.get_player_season_stats(player_name, team2.name, season_id)
+                    if season_stats:
+                        player_season_stats[player_name] = season_stats
+            except Exception as e:
+                print(f"Warning: Could not fetch player season stats: {e}")
+        
+        # Player stats fonts
+        player_name_font = load_font(FONT_PATHS_BOLD, 22)
+        player_stat_font = load_font(FONT_PATHS_REGULAR, 20)
+        player_header_font = load_font(FONT_PATHS_BOLD, 24)
+        
+        # Team 1 player stats table
+        team1_table_width = team1_width - 60
+        team1_table_x = team1_x + 30
+        team1_table_y = _render_player_stats_table(
+            draw, team1_table_x, player_stats_y, team1_table_width,
+            game_result.get('team1_player_stats', {}), team1.name, max_players=7,
+            name_font=player_name_font, stat_font=player_stat_font, header_font=player_header_font,
+            season_stats_dict=player_season_stats
+        )
+        
+        # Team 2 player stats table
+        team2_table_width = team2_width - 60
+        team2_table_x = team2_x + 30
+        team2_table_y = _render_player_stats_table(
+            draw, team2_table_x, player_stats_y, team2_table_width,
+            game_result.get('team2_player_stats', {}), team2.name, max_players=7,
+            name_font=player_name_font, stat_font=player_stat_font, header_font=player_header_font,
+            season_stats_dict=player_season_stats
+        )
+        
+        # VS divider in center (moved down to accommodate player stats)
+        vs_y = scoreboard_y + scoreboard_height // 2
+        vs_font = load_font(FONT_PATHS_BOLD, 56)
+        draw_text_with_shadow(draw, (width//2, vs_y), "VS", vs_font, fill='#888888', anchor="mm")
 
-        # VS Text in center
-        draw_text_with_shadow(draw, (width//2, card_y + card_height//2), "VS", vs_font, fill='#888888', anchor="mm")
-
-        # Loser Logo (Small, Bottom Right)
-        if losing_team_logo:
-            loser_logo_size = 120
-            loser_logo = losing_team_logo.resize((loser_logo_size, loser_logo_size), Image.Resampling.LANCZOS)
-            loser_x = width - loser_logo_size - 30
-            loser_y = height - loser_logo_size - 30
-            # Add a small label
-            draw_text_with_shadow(draw, (loser_x + loser_logo_size//2, loser_y - 20), "Matchup", legend_font, anchor="ms")
-            img.paste(loser_logo, (loser_x, loser_y), loser_logo)
-
-        # Player Stats Table Section - Two Side-by-Side Scoreboards
-        player_section_y = card_y + card_height + 50
-        table_bottom_margin = 60  # Space for legend at bottom
-        table_available_height = height - player_section_y - table_bottom_margin
-        
-        # Get player stats from game result
-        team1_player_stats = game_result.get('team1_player_stats', {})
-        team2_player_stats = game_result.get('team2_player_stats', {})
-        
-        # Separate players by team
-        team1_players = []
-        if hasattr(team1, 'players') and team1.players:
-            for player in team1.players:
-                player_name = player.get('name', 'Unknown')
-                player_stats = team1_player_stats.get(player_name, {})
-                team1_players.append({
-                    'player': player,
-                    'stats': player_stats
-                })
-        
-        team2_players = []
-        if hasattr(team2, 'players') and team2.players:
-            for player in team2.players:
-                player_name = player.get('name', 'Unknown')
-                player_stats = team2_player_stats.get(player_name, {})
-                team2_players.append({
-                    'player': player,
-                    'stats': player_stats
-                })
-        
-        # Sort players by ranking (1-7, best to worst)
-        team1_players.sort(key=lambda x: x['player'].get('ranking', 4))
-        team2_players.sort(key=lambda x: x['player'].get('ranking', 4))
-        
-        # Calculate dimensions for side-by-side tables
-        table_margin = 30
-        gap_between_tables = 20
-        table_width = (width - (table_margin * 2) - gap_between_tables) // 2
-        
-        # Calculate max players for row height calculation
-        max_players = max(len(team1_players), len(team2_players), 1)
-        header_height = 50
-        team_name_height = 40
-        row_height = min(45, (table_available_height - header_height - team_name_height) // max(1, max_players))
-        table_start_y = player_section_y
-        table_end_y = height - table_bottom_margin
-        
-        # Column widths for each table (smaller to fit side-by-side)
-        col_rank_width = 50
-        col_name_width = 140
-        col_stat_width = 80
-        
-        # Create overlay for stats tables
-        table_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-        table_overlay_draw = ImageDraw.Draw(table_overlay)
-        
-        # Helper function to draw a team scoreboard
-        def draw_team_scoreboard(team_players, team_name, table_left_x, team_color=(78, 205, 196)):
-            """Draw a single team's scoreboard"""
-            table_right_x = table_left_x + table_width
-            
-            # Draw table background
-            table_bg_fill = (20, 30, 50, 220)
-            table_overlay_draw.rounded_rectangle(
-                [table_left_x, table_start_y, table_right_x, table_end_y],
-                radius=15, fill=table_bg_fill, outline=team_color, width=2
-            )
-            
-            # Draw team name header
-            team_name_y = table_start_y + 10
-            team_name_bg = (40, 50, 70, 255)
-            table_overlay_draw.rectangle(
-                [table_left_x + 5, team_name_y, table_right_x - 5, team_name_y + team_name_height],
-                fill=team_name_bg
-            )
-            draw_text_with_shadow(table_overlay_draw, 
-                                ((table_left_x + table_right_x) // 2, team_name_y + team_name_height // 2),
-                                team_name, team_name_font, fill='#ffffff', anchor="mm")
-            
-            # Draw header row
-            header_y = team_name_y + team_name_height + 5
-            header_bg = (40, 50, 70, 255)
-            table_overlay_draw.rectangle(
-                [table_left_x + 5, header_y, table_right_x - 5, header_y + header_height],
-                fill=header_bg
-            )
-            
-            # Header text positions
-            header_x_rank = table_left_x + 10
-            header_x_name = header_x_rank + col_rank_width
-            header_x_run = header_x_name + col_name_width
-            header_x_throw = header_x_run + col_stat_width
-            header_x_kick = header_x_throw + col_stat_width
-            
-            # Draw header labels
-            header_center_y = header_y + header_height // 2
-            draw_text_with_shadow(table_overlay_draw, (header_x_rank + col_rank_width // 2, header_center_y),
-                                "Rk", table_header_font, fill='#ffffff', anchor="mm")
-            draw_text_with_shadow(table_overlay_draw, (header_x_name + 5, header_center_y),
-                                "Name", table_header_font, fill='#ffffff', anchor="lm")
-            draw_text_with_shadow(table_overlay_draw, (header_x_run + col_stat_width // 2, header_center_y),
-                                "Run", table_header_font, fill='#ffffff', anchor="mm")
-            draw_text_with_shadow(table_overlay_draw, (header_x_throw + col_stat_width // 2, header_center_y),
-                                "Throw", table_header_font, fill='#ffffff', anchor="mm")
-            draw_text_with_shadow(table_overlay_draw, (header_x_kick + col_stat_width // 2, header_center_y),
-                                "Kick", table_header_font, fill='#ffffff', anchor="mm")
-            
-            # Draw player rows
-            current_y = header_y + header_height + 5
-            for i, player_data in enumerate(team_players):
-                player = player_data['player']
-                player_stats = player_data['stats']
-                
-                row_y = current_y
-                row_bottom = min(row_y + row_height, table_end_y - 5)
-                
-                # Check for cascade zones
-                cascade_runs = player_stats.get('cascade_runs', 0)
-                cascade_throws = player_stats.get('cascade_throws', 0)
-                cascade_kicks = player_stats.get('cascade_kicks', 0)
-                has_cascade = cascade_runs > 0 or cascade_throws > 0 or cascade_kicks > 0
-                
-                # Row background - highlight if cascade zones achieved
-                if has_cascade:
-                    row_bg = (60, 80, 100, 255)  # Highlighted background for cascade
-                    row_border = (255, 217, 61, 255)  # Gold border for cascade
-                else:
-                    row_bg = (30, 40, 60, 200) if i % 2 == 0 else (25, 35, 55, 200)  # Alternating
-                    row_border = None
-                
-                table_overlay_draw.rectangle(
-                    [table_left_x + 5, row_y, table_right_x - 5, row_bottom],
-                    fill=row_bg, outline=row_border, width=2 if has_cascade else 0
-                )
-                
-                # Get player data
-                ranking = player.get('ranking', 0)
-                player_name = player.get('name', 'Unknown')
-                runs_att = player_stats.get('runs_attempted', 0)
-                runs_comp = player_stats.get('runs_completed', 0)
-                throws_att = player_stats.get('throws_attempted', 0)
-                throws_comp = player_stats.get('throws_completed', 0)
-                kicks_att = player_stats.get('kicks_attempted', 0)
-                kicks_comp = player_stats.get('kicks_completed', 0)
-                
-                # Center text vertically in row
-                text_y = row_y + (row_bottom - row_y) // 2
-                
-                # Draw ranking
-                draw_text_with_shadow(table_overlay_draw, (header_x_rank + col_rank_width // 2, text_y),
-                                    f"#{ranking}", table_row_font, fill='#ffffff', anchor="mm")
-                
-                # Draw name (truncate if too long)
-                max_name_len = 15
-                display_name = player_name[:max_name_len] if len(player_name) <= max_name_len else player_name[:max_name_len-3] + "..."
-                draw_text_with_shadow(table_overlay_draw, (header_x_name + 5, text_y),
-                                    display_name, table_row_font, fill='#ffffff', anchor="lm")
-                
-                # Draw stat fractions (completions/attempts)
-                run_text = f"{runs_comp}/{runs_att}"
-                throw_text = f"{throws_comp}/{throws_att}"
-                kick_text = f"{kicks_comp}/{kicks_att}"
-                
-                # Color stats based on completion (teal for completed, white for attempted)
-                run_color = '#4ecdc4' if runs_comp > 0 else '#aaaaaa'
-                throw_color = '#4ecdc4' if throws_comp > 0 else '#aaaaaa'
-                kick_color = '#4ecdc4' if kicks_comp > 0 else '#aaaaaa'
-                
-                draw_text_with_shadow(table_overlay_draw, (header_x_run + col_stat_width // 2, text_y),
-                                    run_text, table_stat_font, fill=run_color, anchor="mm")
-                draw_text_with_shadow(table_overlay_draw, (header_x_throw + col_stat_width // 2, text_y),
-                                    throw_text, table_stat_font, fill=throw_color, anchor="mm")
-                draw_text_with_shadow(table_overlay_draw, (header_x_kick + col_stat_width // 2, text_y),
-                                    kick_text, table_stat_font, fill=kick_color, anchor="mm")
-                
-                # Draw cascade zone indicators
-                if has_cascade:
-                    cascade_x = table_right_x - 15
-                    cascade_indicators = []
-                    if cascade_runs > 0:
-                        cascade_indicators.append(f"R×{cascade_runs}")
-                    if cascade_throws > 0:
-                        cascade_indicators.append(f"T×{cascade_throws}")
-                    if cascade_kicks > 0:
-                        cascade_indicators.append(f"K×{cascade_kicks}")
-                    
-                    cascade_text = " ".join(cascade_indicators)
-                    draw_text_with_shadow(table_overlay_draw, (cascade_x, text_y),
-                                        cascade_text, table_row_font, fill='#ffd93d', anchor="rm")
-                
-                current_y = row_bottom + 2
-                if current_y >= table_end_y - 5:
-                    break
-        
-        # Draw Team 1 scoreboard on the left
-        team1_table_x = table_margin
-        draw_team_scoreboard(team1_players, team1.name, team1_table_x, team_color=(78, 205, 196))
-        
-        # Draw Team 2 scoreboard on the right
-        team2_table_x = table_margin + table_width + gap_between_tables
-        draw_team_scoreboard(team2_players, team2.name, team2_table_x, team_color=(255, 152, 0))
-        
-        # Paste table overlay
-        img.paste(table_overlay, (0, 0), table_overlay)
-
-        # Legend
-        legend_y = height - 40
-        legend_text = "= Cascade Zone"
-        # Draw circle
-        circle_radius = 8
-        legend_text_bbox = draw.textbbox((0, 0), legend_text, font=legend_font)
-        total_width = legend_text_bbox[2] - legend_text_bbox[0] + 25
-        start_x = (width - total_width) // 2
-        
-        draw.ellipse([start_x, legend_y - circle_radius, start_x + circle_radius*2, legend_y + circle_radius], fill='#ffd93d', outline='white')
-        draw_text_with_shadow(draw, (start_x + 25, legend_y), legend_text, legend_font, anchor="lm")
+        # Footer with cascade indicator
+        footer_y = max(team1_table_y, team2_table_y) + 30
+        legend_font = load_font(FONT_PATHS_REGULAR, 20)
+        legend_text = "* = Cascade Zone"
+        draw_text_with_shadow(draw, (width//2, footer_y), legend_text, legend_font, fill='#888888', anchor="mm")
 
         # Save image
         img.save(filename)
+        
+        # Generate Stories version (9:16 aspect ratio)
+        stories_filename = filename.replace('.png', '_stories.png')
+        generate_stories_version(img, stories_filename, game_result, team_analytics, game_type, week, game_number, season_id)
+        
         return True
     except Exception as e:
         print(f"Error generating image {filename}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def generate_stories_version(base_image, filename, game_result, team_analytics, game_type="game", week=None, game_number=None, season_id=None):
+    """Generate a 9:16 Stories version of the scoreboard optimized for Instagram Stories"""
+    try:
+        # Stories dimensions: 1080x1920 (9:16)
+        stories_width, stories_height = 1080, 1920
+        
+        # Resize base image to fit Stories format (crop center or letterbox)
+        # We'll create a new vertical layout optimized for Stories
+        stories_img = Image.new('RGB', (stories_width, stories_height), color='#0a0a1a')
+        stories_draw = ImageDraw.Draw(stories_img)
+        
+        # Draw gradient background
+        draw_gradient_background(stories_img, stories_width, stories_height, '#0a0a1a', '#1a1a2e', 'vertical')
+        
+        # Get team info
+        team1 = game_result['team1']
+        team2 = game_result['team2']
+        team1_score = game_result['team1_score']
+        team2_score = game_result['team2_score']
+        team1_detail = game_result['team1_detail']
+        team2_detail = game_result['team2_detail']
+        
+        # Load logos
+        logo1_path = os.path.join(config.LOGOS_DIRECTORY, team1.get_logo_filename())
+        logo2_path = os.path.join(config.LOGOS_DIRECTORY, team2.get_logo_filename())
+        
+        logo1_original = None
+        for logo_file in [logo1_path, logo1_path.replace("'", "'"), logo1_path.replace("'", "'")]:
+            try:
+                if os.path.exists(logo_file):
+                    logo1_original = Image.open(logo_file).convert('RGBA')
+                    break
+            except:
+                continue
+        
+        logo2_original = None
+        for logo_file in [logo2_path, logo2_path.replace("'", "'"), logo2_path.replace("'", "'")]:
+            try:
+                if os.path.exists(logo_file):
+                    logo2_original = Image.open(logo_file).convert('RGBA')
+                    break
+            except:
+                continue
+        
+        # Load fonts for Stories
+        title_font = load_font(FONT_PATHS_BOLD, 36)
+        score_font = load_font(FONT_PATHS_BOLD, 140)
+        team_font = load_font(FONT_PATHS_BOLD, 44)
+        analytics_value_font = load_font(FONT_PATHS_BOLD, 24)
+        player_name_font = load_font(FONT_PATHS_BOLD, 18)
+        player_stat_font = load_font(FONT_PATHS_REGULAR, 16)
+        
+        # Header
+        header_y = 50
+        title = f"{game_type.replace('_', ' ').title()}"
+        if week:
+            title = f"Week {week}"
+        elif game_number:
+            title = f"{title} {game_number}"
+        draw_text_with_shadow(stories_draw, (stories_width//2, header_y), title, title_font, fill='#ffffff', anchor="mm")
+        
+        # Team 1 section (top) - more compact
+        team1_y = 140
+        logo_size = 150
+        
+        if logo1_original:
+            logo1 = logo1_original.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            logo1_x = (stories_width - logo_size) // 2
+            stories_img.paste(logo1, (logo1_x, team1_y), logo1)
+        
+        team1_name_y = team1_y + logo_size + 15
+        draw_text_with_shadow(stories_draw, (stories_width//2, team1_name_y), team1.name, team_font, fill='#ffffff', anchor="mm")
+        
+        score1_y = team1_name_y + 60
+        draw_text_with_shadow(stories_draw, (stories_width//2, score1_y), str(team1_score), score_font, fill='#ffffff', anchor="mm")
+        
+        # Game stats for team 1 (compact)
+        game_stats_y = score1_y + 100
+        stats_text = f"R:{team1_detail.runs} T:{team1_detail.throws} K:{team1_detail.kicks}"
+        draw_text_with_shadow(stories_draw, (stories_width//2, game_stats_y), stats_text, analytics_value_font, fill='#4ecdc4', anchor="mm")
+        
+        # Analytics for team 1 (if available)
+        if team_analytics:
+            team1_stats = team_analytics['team1_stats']
+            analytics_y = game_stats_y + 35
+            record_text = f"{team1_stats['wins']}-{team1_stats['losses']} • {team1_stats['win_percentage']}% • {team1_stats['avg_points_for']:.1f} PPG"
+            draw_text_with_shadow(stories_draw, (stories_width//2, analytics_y), record_text, analytics_value_font, fill='#888888', anchor="mm")
+        
+        # Top players for team 1 (condensed)
+        player_stats_start_y = analytics_y + 50 if team_analytics else game_stats_y + 50
+        team1_players = game_result.get('team1_player_stats', {})
+        sorted_team1 = []
+        if team1_players:
+            sorted_team1 = sorted(team1_players.items(), key=lambda x: x[1].get('points', 0), reverse=True)[:3]
+            player_y = player_stats_start_y
+            for idx, (player_id, stats) in enumerate(sorted_team1):
+                player_name = _get_player_display_name(stats)
+                points = stats.get('points', 0)
+                runs = f"{stats.get('runs_completed', 0)}/{stats.get('runs_attempted', 0)}"
+                throws = f"{stats.get('throws_completed', 0)}/{stats.get('throws_attempted', 0)}"
+                kicks = f"{stats.get('kicks_completed', 0)}/{stats.get('kicks_attempted', 0)}"
+                
+                player_text = f"{player_name[:15]}: {points}pts | R:{runs} T:{throws} K:{kicks}"
+                color = '#4ecdc4' if idx == 0 else '#aaaaaa'
+                draw_text_with_shadow(stories_draw, (stories_width//2, player_y), player_text, player_stat_font, fill=color, anchor="mm")
+                player_y += 22
+        
+        # VS divider
+        vs_y = player_stats_start_y + (len(sorted_team1) * 22) + 30 if sorted_team1 else player_stats_start_y + 30
+        vs_font = load_font(FONT_PATHS_BOLD, 40)
+        draw_text_with_shadow(stories_draw, (stories_width//2, vs_y), "VS", vs_font, fill='#888888', anchor="mm")
+        
+        # Team 2 section (bottom) - more compact
+        team2_y = vs_y + 50
+        
+        if logo2_original:
+            logo2 = logo2_original.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            logo2_x = (stories_width - logo_size) // 2
+            stories_img.paste(logo2, (logo2_x, team2_y), logo2)
+        
+        team2_name_y = team2_y + logo_size + 15
+        draw_text_with_shadow(stories_draw, (stories_width//2, team2_name_y), team2.name, team_font, fill='#ffffff', anchor="mm")
+        
+        score2_y = team2_name_y + 60
+        draw_text_with_shadow(stories_draw, (stories_width//2, score2_y), str(team2_score), score_font, fill='#ffffff', anchor="mm")
+        
+        # Game stats for team 2 (compact)
+        game_stats_y2 = score2_y + 100
+        stats_text2 = f"R:{team2_detail.runs} T:{team2_detail.throws} K:{team2_detail.kicks}"
+        draw_text_with_shadow(stories_draw, (stories_width//2, game_stats_y2), stats_text2, analytics_value_font, fill='#4ecdc4', anchor="mm")
+        
+        # Analytics for team 2 (if available)
+        if team_analytics:
+            team2_stats = team_analytics['team2_stats']
+            analytics_y2 = game_stats_y2 + 35
+            record_text2 = f"{team2_stats['wins']}-{team2_stats['losses']} • {team2_stats['win_percentage']}% • {team2_stats['avg_points_for']:.1f} PPG"
+            draw_text_with_shadow(stories_draw, (stories_width//2, analytics_y2), record_text2, analytics_value_font, fill='#888888', anchor="mm")
+        
+        # Top players for team 2 (condensed)
+        player_stats_start_y2 = analytics_y2 + 50 if team_analytics else game_stats_y2 + 50
+        team2_players = game_result.get('team2_player_stats', {})
+        if team2_players:
+            sorted_team2 = sorted(team2_players.items(), key=lambda x: x[1].get('points', 0), reverse=True)[:3]
+            player_y2 = player_stats_start_y2
+            for idx, (player_id, stats) in enumerate(sorted_team2):
+                player_name = _get_player_display_name(stats)
+                points = stats.get('points', 0)
+                runs = f"{stats.get('runs_completed', 0)}/{stats.get('runs_attempted', 0)}"
+                throws = f"{stats.get('throws_completed', 0)}/{stats.get('throws_attempted', 0)}"
+                kicks = f"{stats.get('kicks_completed', 0)}/{stats.get('kicks_attempted', 0)}"
+                
+                player_text = f"{player_name[:15]}: {points}pts | R:{runs} T:{throws} K:{kicks}"
+                color = '#4ecdc4' if idx == 0 else '#aaaaaa'
+                draw_text_with_shadow(stories_draw, (stories_width//2, player_y2), player_text, player_stat_font, fill=color, anchor="mm")
+                player_y2 += 22
+        
+        # Save Stories version
+        stories_img.save(filename)
+        return True
+    except Exception as e:
+        print(f"Error generating Stories version {filename}: {e}")
         import traceback
         traceback.print_exc()
         return False

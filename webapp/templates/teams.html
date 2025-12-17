@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header -->
+    <div class="glass-panel p-6 rounded-xl">
+        <h1 class="text-3xl font-bold text-white mb-2">
+            <i class="fas fa-users mr-3 text-green-400"></i>Teams Overview
+        </h1>
+        {% if active_season %}
+            <p class="text-gray-400">{{ active_season.name }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Teams List -->
+    <div class="space-y-6">
+        {% for team_name, stats in teams_data %}
+        <div class="glass-panel rounded-xl overflow-hidden" x-data="{ expanded: false }">
+            <!-- Team Header -->
+            <div class="bg-gray-900/50 p-4 border-b border-gray-700 cursor-pointer hover:bg-gray-800/50 transition" @click="expanded = !expanded">
+                <div class="flex justify-between items-center">
+                    <div class="flex-1">
+                        <h2 class="text-2xl font-bold text-white mb-1">{{ team_name }}</h2>
+                        <div class="flex items-center gap-4 text-sm text-gray-400">
+                            <span><i class="fas fa-trophy mr-1 text-yellow-400"></i><strong class="text-white">{{ stats.season_record.wins }}-{{ stats.season_record.losses }}</strong> <span class="text-gray-500">({{ stats.current_record.wins }}-{{ stats.current_record.losses }} all-time)</span></span>
+                            <span><i class="fas fa-bolt mr-1 text-blue-400"></i>{{ "%.1f"|format(stats.season_avg_points_for) }} PPG</span>
+                            <span><i class="fas fa-shield-alt mr-1 text-red-400"></i>{{ "%.1f"|format(stats.season_avg_points_against) }} PAPG</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <i class="fas" :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'" class="text-gray-400 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expanded Content -->
+            <div x-show="expanded" x-transition style="display: none;" class="p-6 space-y-6">
+                <!-- Basic Info & Averages -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase mb-2">Season Record</h3>
+                        <div class="text-2xl font-bold text-white">{{ stats.season_record.wins }}-{{ stats.season_record.losses }}</div>
+                        <div class="text-sm text-gray-400 mt-1">
+                            Win %: {{ "%.1f"|format((stats.season_record.wins / (stats.season_record.wins + stats.season_record.losses) * 100)) if (stats.season_record.wins + stats.season_record.losses) > 0 else 0 }}%
+                        </div>
+                        <div class="text-xs text-gray-500 mt-2">All-time: {{ stats.current_record.wins }}-{{ stats.current_record.losses }}</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase mb-2">Season Avg Points/Game</h3>
+                        <div class="text-2xl font-bold text-emerald-400">{{ "%.1f"|format(stats.season_avg_points_for) }}</div>
+                        <div class="text-sm text-gray-400 mt-1">Defense: {{ "%.1f"|format(stats.season_avg_points_against) }}</div>
+                        <div class="text-xs text-gray-500 mt-2">All-time: {{ "%.1f"|format(stats.avg_points_for) }} / {{ "%.1f"|format(stats.avg_points_against) }}</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase mb-2">Season Point Differential</h3>
+                        <div class="text-2xl font-bold {{ 'text-emerald-400' if stats.season_avg_point_differential >= 0 else 'text-red-400' }}">
+                            {{ "+%.1f"|format(stats.season_avg_point_differential) if stats.season_avg_point_differential >= 0 else "%.1f"|format(stats.season_avg_point_differential) }}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-2">All-time: {{ "+%.1f"|format(stats.avg_point_differential) if stats.avg_point_differential >= 0 else "%.1f"|format(stats.avg_point_differential) }}</div>
+                    </div>
+                </div>
+
+                <!-- Scoring Breakdown -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-chart-pie mr-2 text-blue-400"></i>Scoring Breakdown
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-300">Runs</span>
+                                <span class="text-sm font-bold text-blue-400">{{ "%.1f"|format(stats.run_points_pct) }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full" style="width: {{ stats.run_points_pct }}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">{{ stats.total_runs }} total runs</div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-300">Throws</span>
+                                <span class="text-sm font-bold text-purple-400">{{ "%.1f"|format(stats.throw_points_pct) }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-purple-500 h-2 rounded-full" style="width: {{ stats.throw_points_pct }}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">{{ stats.total_throws }} total throws</div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-300">Kicks</span>
+                                <span class="text-sm font-bold text-yellow-400">{{ "%.1f"|format(stats.kick_points_pct) }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-yellow-500 h-2 rounded-full" style="width: {{ stats.kick_points_pct }}%"></div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">{{ stats.total_kicks }} total kicks</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cascade Performance -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase mb-2">Cascade Performance</h3>
+                        <div class="text-2xl font-bold text-yellow-400">{{ "%.2f"|format(stats.avg_cascades_per_game) }}</div>
+                        <div class="text-sm text-gray-400 mt-1">Avg cascades per game</div>
+                        <div class="text-sm text-gray-400 mt-2">Success rate: {{ "%.1f"|format(stats.cascade_success_rate) }}%</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg">
+                        <h3 class="text-sm font-bold text-gray-400 uppercase mb-2">Win/Loss Streaks</h3>
+                        <div class="space-y-2">
+                            <div>
+                                <span class="text-sm text-gray-400">Current:</span>
+                                <span class="ml-2 font-bold {% if stats.current_streak.type == 'win' %}text-emerald-400{% elif stats.current_streak.type == 'loss' %}text-red-400{% else %}text-gray-400{% endif %}">
+                                    {{ stats.current_streak.type|title }} {{ stats.current_streak.length }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-400">Longest Win:</span>
+                                <span class="ml-2 font-bold text-emerald-400">{{ stats.longest_win_streak }}</span>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-400">Longest Loss:</span>
+                                <span class="ml-2 font-bold text-red-400">{{ stats.longest_loss_streak }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Home vs Away -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-home mr-2 text-green-400"></i>Home vs Away Performance
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <h4 class="text-sm font-bold text-green-400 uppercase mb-2">Home</h4>
+                            <div class="text-lg font-bold text-white">
+                                {{ stats.home_games.wins }}-{{ stats.home_games.losses }}
+                                <span class="text-sm text-gray-400 ml-2">({{ "%.1f"|format(stats.home_win_pct) }}%)</span>
+                            </div>
+                            <div class="text-sm text-gray-400 mt-2">
+                                {{ "%.1f"|format(stats.avg_home_points_for) }} PPG / {{ "%.1f"|format(stats.avg_home_points_against) }} PAPG
+                            </div>
+                        </div>
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <h4 class="text-sm font-bold text-blue-400 uppercase mb-2">Away</h4>
+                            <div class="text-lg font-bold text-white">
+                                {{ stats.away_games.wins }}-{{ stats.away_games.losses }}
+                                <span class="text-sm text-gray-400 ml-2">({{ "%.1f"|format(stats.away_win_pct) }}%)</span>
+                            </div>
+                            <div class="text-sm text-gray-400 mt-2">
+                                {{ "%.1f"|format(stats.avg_away_points_for) }} PPG / {{ "%.1f"|format(stats.avg_away_points_against) }} PAPG
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Head-to-Head Records -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-fist-raised mr-2 text-red-400"></i>Notable Matchups
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {% if stats.beat_most %}
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <h4 class="text-sm font-bold text-emerald-400 uppercase mb-2">Beat Most</h4>
+                            <div class="text-lg font-bold text-white">{{ stats.beat_most.team }}</div>
+                            <div class="text-sm text-gray-400 mt-1">{{ stats.beat_most.record }}</div>
+                        </div>
+                        {% endif %}
+                        {% if stats.lose_most %}
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <h4 class="text-sm font-bold text-red-400 uppercase mb-2">Lose Most</h4>
+                            <div class="text-lg font-bold text-white">{{ stats.lose_most.team }}</div>
+                            <div class="text-sm text-gray-400 mt-1">{{ stats.lose_most.record }}</div>
+                        </div>
+                        {% endif %}
+                        {% if stats.closest_games %}
+                        <div class="bg-gray-800/50 p-4 rounded-lg">
+                            <h4 class="text-sm font-bold text-yellow-400 uppercase mb-2">Closest Games</h4>
+                            <div class="text-lg font-bold text-white">{{ stats.closest_games.team }}</div>
+                            <div class="text-sm text-gray-400 mt-1">{{ stats.closest_games.record }} ({{ stats.closest_games.avg_diff }} avg diff)</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Recent Results by Season -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-history mr-2 text-purple-400"></i>Game History
+                    </h3>
+                    <div class="space-y-4">
+                        {% for season_id, games in stats.games_by_season.items()|sort(reverse=True) %}
+                        <div>
+                            <h4 class="text-lg font-bold text-gray-300 mb-2">
+                                {{ games[0].season_name if games else 'Unknown Season' }}
+                            </h4>
+                            <div class="space-y-1">
+                                {% for game in games[:10] %}
+                                <div class="bg-gray-800/50 p-3 rounded flex justify-between items-center">
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium text-white">
+                                            Week {{ game.week }}{% if game.game_number %} • Game {{ game.game_number }}{% endif %}
+                                            vs {{ game.opponent }}
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-sm font-bold {% if game.won %}text-emerald-400{% else %}text-red-400{% endif %}">
+                                            {% if game.won %}W{% else %}L{% endif %} {{ game.team_score }}-{{ game.opp_score }}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if games|length > 10 %}
+                                <div class="text-xs text-gray-500 text-center py-2">
+                                    +{{ games|length - 10 }} more games
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Player Roster -->
+                <div class="glass-panel p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-users mr-2 text-cyan-400"></i>Player Roster
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {% for player in stats.players|sort(attribute='ranking') %}
+                        <div class="bg-gray-800/50 p-3 rounded-lg hover:bg-gray-700/50 transition cursor-pointer" onclick="window.location.href='/analytics#player-{{ player.name }}'">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-white">{{ player.name }}</div>
+                                    <div class="text-xs text-gray-400">{{ player.get('role', 'Player') }}</div>
+                                </div>
+                                <div class="text-xs font-bold text-yellow-400">#{{ player.get('ranking', '?') }}</div>
+                            </div>
+                            <div class="text-xs text-gray-400">
+                                Best: <span class="text-blue-400">{{ player.get('best_stat', 'N/A') }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Empty State -->
+    {% if not teams_data %}
+    <div class="text-center py-12 glass-panel rounded-xl text-gray-400">
+        <i class="fas fa-users text-4xl mb-3 opacity-50"></i>
+        <p>No teams found.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Alpine.js filter for jinja2 template conditionals
+// Since we're using Alpine.js, we need to handle the conditional classes properly
+document.addEventListener('alpine:init', () => {
+    // This ensures Alpine.js processes the x-data correctly
+});
+</script>
+{% endblock %}
+
