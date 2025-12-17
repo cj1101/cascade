@@ -126,13 +126,15 @@ def load_gemini_api_key():
     )
 
 
-def generate_random_prompt(winner_team_name, loser_team_name):
+def generate_random_prompt(winner_team_name, loser_team_name, winner_score, loser_score):
     """
     Generate a random prompt with varying actions, styles, and compositions.
     
     Args:
         winner_team_name: Name of the winning team
         loser_team_name: Name of the losing team
+        winner_score: Score of the winning team
+        loser_score: Score of the losing team
     
     Returns:
         A tuple of (prompt_string, action, style, scenario) for use in enhanced prompts
@@ -233,13 +235,19 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
         if team1_score > team2_score:
             winner_team = team1
             loser_team = team2
+            winner_score = team1_score
+            loser_score = team2_score
         elif team2_score > team1_score:
             winner_team = team2
             loser_team = team1
+            winner_score = team2_score
+            loser_score = team1_score
         else:
             # Tie - use team1 as winner by default
             winner_team = team1
             loser_team = team2
+            winner_score = team1_score
+            loser_score = team2_score
         
         # Load logos
         winner_logo = load_logo_image(winner_team)
@@ -265,7 +273,7 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
             )
         else:
             # Generate random prompt with all variations
-            prompt, action, style, scenario = generate_random_prompt(winner_team.name, loser_team.name)
+            prompt, action, style, scenario = generate_random_prompt(winner_team.name, loser_team.name, winner_score, loser_score)
         
         try:
             import requests
@@ -284,41 +292,57 @@ def generate_game_image_with_gemini(game_result, filename, game_type="game", wee
             if is_champion:
                 # For champion trophy image, only use winner logo
                 final_prompt = (
-                    f"Here is the winning team logo. Logo 1 represents {winner_team.name}. "
+                    f"Here is the winning team logo. Logo 1 represents {winner_team.name}, "
+                    f"who won the championship with a final score of {winner_score} points. "
                     f"Transform this logo into a character or figure representing the team. "
                     f"The character should be based on and inspired by the logo design - use the logo's "
                     f"colors, shapes, symbols, and visual elements to create the character. "
                     f"{prompt} "
-                    f"The character should clearly represent the team and logo."
+                    f"The character should clearly represent the team and logo. "
+                    f"IMPORTANT: {winner_team.name} is the WINNER with {winner_score} points from the simulation."
                 )
             else:
                 final_prompt = (
-                    f"Here are two team logos. Logo 1 (winner) represents {winner_team.name}. "
-                    f"Logo 2 (loser) represents {loser_team.name}. "
+                    f"Here are two team logos from a game simulation. "
+                    f"Logo 1 represents {winner_team.name}, the WINNER with {winner_score} points. "
+                    f"Logo 2 represents {loser_team.name}, the LOSER with {loser_score} points. "
+                    f"IMPORTANT: Based on the simulation results, {winner_team.name} won with {winner_score} points, "
+                    f"and {loser_team.name} lost with {loser_score} points. "
                     f"Transform these logos into characters or figures representing each team. "
                     f"The characters should be based on and inspired by the logo designs - use the logo's "
                     f"colors, shapes, symbols, and visual elements to create the characters. "
-                    f"Create a character from logo 1 (the winner) {action} a character from logo 2 (the loser), "
+                    f"Create a character from logo 1 ({winner_team.name}, the winner with {winner_score} points) "
+                    f"{action} a character from logo 2 ({loser_team.name}, the loser with {loser_score} points), "
                     f"{scenario}, rendered in {style}. "
                     f"The characters should clearly represent their respective teams and logos. "
                     f"Make this scene completely unique and original with dramatic composition. "
-                    f"The winning team's character should be clearly victorious and the scene should be dynamic and engaging."
+                    f"The winning team's character ({winner_team.name}) should be clearly victorious and dominant, "
+                    f"while the losing team's character ({loser_team.name}) should appear defeated. "
+                    f"The scene should be dynamic and engaging, clearly showing {winner_team.name} as the winner."
                 )
         else:
             # Fallback if logos aren't available - still create characters but without logo context
             if is_champion:
                 final_prompt = (
-                    f"Create a character representing {winner_team.name} (champion). "
+                    f"Create a character representing {winner_team.name}, the champion who won with {winner_score} points. "
                     f"{prompt} "
-                    f"The character should clearly represent the team."
+                    f"The character should clearly represent the team. "
+                    f"IMPORTANT: {winner_team.name} is the WINNER with {winner_score} points from the simulation."
                 )
             else:
                 final_prompt = (
-                    f"Create characters representing {winner_team.name} (winner) and {loser_team.name} (loser). "
-                    f"Show the character from {winner_team.name} {action} the character from {loser_team.name}, "
+                    f"Create characters representing two teams from a game simulation. "
+                    f"{winner_team.name} is the WINNER with {winner_score} points. "
+                    f"{loser_team.name} is the LOSER with {loser_score} points. "
+                    f"IMPORTANT: Based on the simulation results, {winner_team.name} won with {winner_score} points, "
+                    f"and {loser_team.name} lost with {loser_score} points. "
+                    f"Show the character from {winner_team.name} (winner, {winner_score} points) "
+                    f"{action} the character from {loser_team.name} (loser, {loser_score} points), "
                     f"{scenario}, rendered in {style}. "
                     f"Make this scene completely unique and original with dramatic composition. "
-                    f"The winning team's character should be clearly victorious and the scene should be dynamic and engaging."
+                    f"The winning team's character ({winner_team.name}) should be clearly victorious and dominant, "
+                    f"while the losing team's character ({loser_team.name}) should appear defeated. "
+                    f"The scene should be dynamic and engaging, clearly showing {winner_team.name} as the winner."
                 )
         
         # Use Gemini API for image generation
